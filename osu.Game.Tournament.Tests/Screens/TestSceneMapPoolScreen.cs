@@ -10,6 +10,7 @@ using osu.Game.Tournament.Components;
 using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.MapPool;
 using osuTK;
+using osuTK.Graphics;
 using osuTK.Input;
 
 namespace osu.Game.Tournament.Tests.Screens
@@ -33,13 +34,19 @@ namespace osu.Game.Tournament.Tests.Screens
         private void resetState()
         {
             Ladder.SplitMapPoolByMods.Value = true;
+            Ladder.ProtectOrder.Value = OrderType.ABAB;
+            Ladder.BanOrder.Value = OrderType.ABAB;
+            Ladder.PickOrder.Value = OrderType.ABAB;
+            Ladder.PhaseStarterDistribution.Value = PhaseStarterDistributionType.ProtectBanTogether;
 
             Ladder.CurrentMatch.Value = new TournamentMatch();
             Ladder.CurrentMatch.Value = Ladder.Matches.First();
             Ladder.CurrentMatch.Value.PicksBans.Clear();
             Ladder.CurrentMatch.Value.Protects.Clear();
             Ladder.CurrentMatch.Value.Round.Value!.ProtectCount.Value = 0;
-            Ladder.CurrentMatch.Value.Round.Value.AllowPickingOpponentProtects.Value = true;
+            Ladder.CurrentMatch.Value.Round.Value!.BanCount.Value = 1;
+            Ladder.CurrentMatch.Value.Round.Value!.AllowPickingOpponentProtects.Value = true;
+            Ladder.CurrentMatch.Value = Ladder.Matches.First();
         }
 
         [SetUp]
@@ -153,6 +160,59 @@ namespace osu.Game.Tournament.Tests.Screens
         }
 
         [Test]
+        public void TestPhaseStarterDistributions()
+        {
+            AddStep("verify phase starters from red protect", () =>
+            {
+                var match = new TournamentMatch();
+                match.Protects.Add(new BeatmapChoice { Team = TeamColour.Red, Type = ChoiceType.Protect });
+
+                assertPhaseStarters(match, new[]
+                {
+                    (TeamColour.Red, TeamColour.Red, TeamColour.Red),
+                    (TeamColour.Red, TeamColour.Red, TeamColour.Blue),
+                    (TeamColour.Red, TeamColour.Blue, TeamColour.Red),
+                    (TeamColour.Red, TeamColour.Blue, TeamColour.Blue)
+                });
+            });
+
+            AddStep("verify opposite phase starters from blue ban", () =>
+            {
+                var match = new TournamentMatch();
+                match.PicksBans.Add(new BeatmapChoice { Team = TeamColour.Blue, Type = ChoiceType.Ban });
+
+                assertPhaseStarters(match, new[]
+                {
+                    (TeamColour.Blue, TeamColour.Blue, TeamColour.Blue),
+                    (TeamColour.Blue, TeamColour.Blue, TeamColour.Red),
+                    (TeamColour.Red, TeamColour.Blue, TeamColour.Red),
+                    (TeamColour.Red, TeamColour.Blue, TeamColour.Blue)
+                });
+            });
+        }
+
+        private static void assertPhaseStarters(TournamentMatch match, (TeamColour Protect, TeamColour Ban, TeamColour Pick)[] expected)
+        {
+            var distributions = new[]
+            {
+                PhaseStarterDistributionType.AllTogether,
+                PhaseStarterDistributionType.ProtectBanTogether,
+                PhaseStarterDistributionType.ProtectPickTogether,
+                PhaseStarterDistributionType.BanPickTogether
+            };
+
+            for (int i = 0; i < distributions.Length; i++)
+            {
+                var (protect, ban, pick) = expected[i];
+                Assert.That(match.GetMapPoolPhaseStarter(ChoiceType.Protect, distributions[i]), Is.EqualTo(protect));
+                Assert.That(match.GetMapPoolPhaseStarter(ChoiceType.Ban, distributions[i]), Is.EqualTo(ban));
+                Assert.That(match.GetMapPoolPhaseStarter(ChoiceType.Pick, distributions[i]), Is.EqualTo(pick));
+                Assert.That(match.GetMapPoolTeamColour(1, distributions[i]), Is.EqualTo(protect));
+                Assert.That(match.GetMapPoolTeamColour(2, distributions[i]), Is.EqualTo(protect == TeamColour.Red ? TeamColour.Blue : TeamColour.Red));
+            }
+        }
+
+        [Test]
         public void TestProtectAndPick()
         {
             AddStep("configure protects", () =>
@@ -166,10 +226,13 @@ namespace osu.Game.Tournament.Tests.Screens
             });
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
             AddStep("red protect mode", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Red Protect").TriggerClick());
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Protect);
             AddStep("protect first map", () => clickBeatmapPanel(0));
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Protect);
             AddAssert("red protect recorded", () => Ladder.CurrentMatch.Value!.Protects.Single().Team == TeamColour.Red);
             checkTotalPickBans(0);
             AddStep("protect second map", () => clickBeatmapPanel(1));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Ban);
             AddAssert("blue protect recorded", () => Ladder.CurrentMatch.Value!.Protects.Last().Team == TeamColour.Blue);
             AddStep("red ban mode", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Red Ban").TriggerClick());
             AddStep("attempt to ban protected map", () => clickBeatmapPanel(0));
@@ -203,26 +266,32 @@ namespace osu.Game.Tournament.Tests.Screens
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
 
             AddStep("start bans from blue team", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Ban);
 
             AddStep("ban map", () => clickBeatmapPanel(0));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Ban);
             checkTotalPickBans(1);
             checkLastPick(ChoiceType.Ban, TeamColour.Blue);
 
             AddStep("ban map", () => clickBeatmapPanel(1));
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Ban);
             checkTotalPickBans(2);
             checkLastPick(ChoiceType.Ban, TeamColour.Red);
 
             AddStep("ban map", () => clickBeatmapPanel(2));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Ban);
             checkTotalPickBans(3);
-            checkLastPick(ChoiceType.Ban, TeamColour.Red);
-
-            AddStep("pick map", () => clickBeatmapPanel(3));
-            checkTotalPickBans(4);
             checkLastPick(ChoiceType.Ban, TeamColour.Blue);
 
+            AddStep("fourth ban", () => clickBeatmapPanel(3));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Pick);
+            checkTotalPickBans(4);
+            checkLastPick(ChoiceType.Ban, TeamColour.Red);
+
             AddStep("pick map", () => clickBeatmapPanel(4));
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Pick);
             checkTotalPickBans(5);
-            checkLastPick(ChoiceType.Pick, TeamColour.Blue);
+            checkLastPick(ChoiceType.Pick, TeamColour.Red);
         }
 
         [Test]
@@ -241,24 +310,30 @@ namespace osu.Game.Tournament.Tests.Screens
             AddStep("update displayed maps", () => Ladder.SplitMapPoolByMods.Value = false);
 
             AddStep("start bans from blue team", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Ban);
 
             AddStep("ban map", () => clickBeatmapPanel(0));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Ban);
             checkTotalPickBans(1);
             checkLastPick(ChoiceType.Ban, TeamColour.Blue);
 
             AddStep("ban map", () => clickBeatmapPanel(1));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Pick);
             checkTotalPickBans(2);
             checkLastPick(ChoiceType.Ban, TeamColour.Red);
 
             AddStep("pick map", () => clickBeatmapPanel(2));
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Pick);
             checkTotalPickBans(3);
             checkLastPick(ChoiceType.Pick, TeamColour.Red);
 
             AddStep("pick map", () => clickBeatmapPanel(3));
+            assertSelectedActionButton(TeamColour.Red, ChoiceType.Pick);
             checkTotalPickBans(4);
             checkLastPick(ChoiceType.Pick, TeamColour.Blue);
 
             AddStep("pick map", () => clickBeatmapPanel(4));
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Pick);
             checkTotalPickBans(5);
             checkLastPick(ChoiceType.Pick, TeamColour.Red);
 
@@ -268,6 +343,68 @@ namespace osu.Game.Tournament.Tests.Screens
                 Ladder.CurrentMatch.Value = Ladder.Matches.First();
                 Ladder.CurrentMatch.Value.PicksBans.Clear();
             });
+        }
+
+        [Test]
+        public void TestSelectedActionButtonsFollowConfiguredOrder()
+        {
+            AddStep("configure ban and pick orders", () =>
+            {
+                var round = Ladder.CurrentMatch.Value!.Round.Value!;
+                round.ProtectCount.Value = 0;
+                round.BanCount.Value = 2;
+                Ladder.BanOrder.Value = OrderType.ABBA;
+                Ladder.PickOrder.Value = OrderType.ABBA;
+                Ladder.PhaseStarterDistribution.Value = PhaseStarterDistributionType.ProtectBanTogether;
+                Ladder.SplitMapPoolByMods.Value = false;
+                round.Beatmaps.Clear();
+
+                for (int i = 0; i < 8; i++)
+                    addBeatmap();
+            });
+            AddStep("refresh displayed maps", () =>
+            {
+                Ladder.SplitMapPoolByMods.Value = true;
+                Ladder.SplitMapPoolByMods.Value = false;
+            });
+            AddAssert("all test maps displayed", () => screen.ChildrenOfType<TournamentBeatmapPanel>().Count(), () => Is.EqualTo(8));
+
+            AddStep("select blue ban before first action", () => screen.ChildrenOfType<TourneyButton>().First(btn => btn.Text == "Blue Ban").TriggerClick());
+            assertSelectedActionButton(TeamColour.Blue, ChoiceType.Ban);
+
+            var banActions = new[]
+            {
+                (TeamColour.Blue, TeamColour.Red),
+                (TeamColour.Red, TeamColour.Red),
+                (TeamColour.Red, TeamColour.Blue),
+                (TeamColour.Blue, TeamColour.Red)
+            };
+
+            for (int i = 0; i < banActions.Length; i++)
+            {
+                int mapIndex = i;
+                var (current, next) = banActions[i];
+                assertSelectedActionButton(current, ChoiceType.Ban);
+                AddStep($"record {current} ban", () => clickBeatmapPanel(mapIndex));
+                assertSelectedActionButton(next, i == banActions.Length - 1 ? ChoiceType.Pick : ChoiceType.Ban);
+            }
+
+            var pickActions = new[]
+            {
+                (TeamColour.Red, TeamColour.Blue),
+                (TeamColour.Blue, TeamColour.Blue),
+                (TeamColour.Blue, TeamColour.Red),
+                (TeamColour.Red, TeamColour.Red)
+            };
+
+            for (int i = 0; i < pickActions.Length; i++)
+            {
+                int mapIndex = i + banActions.Length;
+                var (current, next) = pickActions[i];
+                assertSelectedActionButton(current, ChoiceType.Pick);
+                AddStep($"record {current} pick", () => clickBeatmapPanel(mapIndex));
+                assertSelectedActionButton(next, ChoiceType.Pick);
+            }
         }
 
         [Test]
@@ -301,8 +438,8 @@ namespace osu.Game.Tournament.Tests.Screens
             AddAssert("three bans registered",
                 () => Ladder.CurrentMatch.Value!.PicksBans.Count(pb => pb.Type == ChoiceType.Ban),
                 () => Is.EqualTo(3));
-            AddAssert("both new bans for blue team",
-                () => Ladder.CurrentMatch.Value!.PicksBans.Count(pb => pb.Type == ChoiceType.Ban && pb.Team == TeamColour.Blue),
+            AddAssert("two bans for red team so far",
+                () => Ladder.CurrentMatch.Value!.PicksBans.Count(pb => pb.Type == ChoiceType.Ban && pb.Team == TeamColour.Red),
                 () => Is.EqualTo(2));
 
             AddStep("ban two more maps", () =>
@@ -314,7 +451,7 @@ namespace osu.Game.Tournament.Tests.Screens
             AddAssert("five bans registered",
                 () => Ladder.CurrentMatch.Value!.PicksBans.Count(pb => pb.Type == ChoiceType.Ban),
                 () => Is.EqualTo(5));
-            AddAssert("both new bans for red team",
+            AddAssert("three bans for red team",
                 () => Ladder.CurrentMatch.Value!.PicksBans.Count(pb => pb.Type == ChoiceType.Ban && pb.Team == TeamColour.Red),
                 () => Is.EqualTo(3));
 
@@ -367,6 +504,18 @@ namespace osu.Game.Tournament.Tests.Screens
             AddAssert($"last choice was {expectedChoice} by {expectedColour}",
                 () => Ladder.CurrentMatch.Value!.PicksBans.Select(pb => (pb.Type, pb.Team)).Last(),
                 () => Is.EqualTo((expectedChoice, expectedColour)));
+
+        private void assertSelectedActionButton(TeamColour expectedColour, ChoiceType expectedChoice) =>
+            AddAssert($"selected button is {expectedColour} {expectedChoice}", () =>
+            {
+                string action = expectedChoice.ToString();
+                string expectedText = $"{(expectedColour == TeamColour.Red ? Ladder.RedSide.Name.Value : Ladder.BlueSide.Name.Value)} {action}";
+                var selectedButtons = screen.ChildrenOfType<TourneyButton>()
+                    .Where(button => button.Text.ToString().EndsWith($" {action}", System.StringComparison.Ordinal) && button.Colour == Color4.White)
+                    .ToArray();
+
+                return selectedButtons.Length == 1 && selectedButtons[0].Text.ToString() == expectedText;
+            });
 
         private void addBeatmap(string mods = "NM")
         {
