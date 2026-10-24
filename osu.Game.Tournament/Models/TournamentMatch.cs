@@ -131,6 +131,12 @@ namespace osu.Game.Tournament.Models
             return actionColour == TeamColour.Red ? TeamColour.Blue : TeamColour.Red;
         }
 
+        public TeamColour? GetMapPoolPhaseStarter(ChoiceType choiceType, PhaseStarterDistributionType distribution)
+        {
+            int starterTeamNumber = distribution.GetStarterTeamNumber(choiceType);
+            return GetMapPoolTeamColour(starterTeamNumber, distribution);
+        }
+
         /// <summary>
         /// Remove scores from the match, in case of a false click or false start.
         /// </summary>
