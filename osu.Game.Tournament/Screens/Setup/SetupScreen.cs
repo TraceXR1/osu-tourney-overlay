@@ -10,7 +10,9 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Shapes;
+using osu.Framework.Localisation;
 using osu.Game.Graphics.Containers;
+using osu.Game.Graphics.UserInterface;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
@@ -244,12 +246,111 @@ namespace osu.Game.Tournament.Screens.Setup
                     Current = LadderInfo.RefereeColour,
                     ControlWidth = 220,
                 },
+                new GridContainer
+                {
+                    RelativeSizeAxes = Axes.X,
+                    AutoSizeAxes = Axes.Y,
+                    ColumnDimensions = new[]
+                    {
+                        new Dimension(GridSizeMode.Relative, 1f / 3),
+                        new Dimension(GridSizeMode.Relative, 1f / 3),
+                        new Dimension(GridSizeMode.Relative, 1f / 3),
+                    },
+                    RowDimensions = new[]
+                    {
+                        new Dimension(GridSizeMode.AutoSize),
+                    },
+                    Content = new[]
+                    {
+                        new Drawable[]
+                        {
+                            new Container
+                            {
+                                RelativeSizeAxes = Axes.X,
+                                AutoSizeAxes = Axes.Y,
+                                Padding = new MarginPadding { Right = 5 },
+                                Child = new LabelledEnumDropdown<OrderType>(true)
+                                {
+                                    Label = "Protect order",
+                                    Description = "Set the order for protects.",
+                                    Items = new[] { OrderType.ABAB, OrderType.ABBA },
+                                    Current = LadderInfo.ProtectOrder,
+                                    DropdownWidth = 1f,
+                                }
+                            },
+                            new Container
+                            {
+                                RelativeSizeAxes = Axes.X,
+                                AutoSizeAxes = Axes.Y,
+                                Padding = new MarginPadding { Left = 5, Right = 5 },
+                                Child = new LabelledEnumDropdown<OrderType>(true)
+                                {
+                                    Label = "Ban order",
+                                    Description = "Set the order for bans.",
+                                    Items = new[] { OrderType.ABAB, OrderType.ABBA },
+                                    Current = LadderInfo.BanOrder,
+                                    DropdownWidth = 1f,
+                                }
+                            },
+                            new Container
+                            {
+                                RelativeSizeAxes = Axes.X,
+                                AutoSizeAxes = Axes.Y,
+                                Padding = new MarginPadding { Left = 5 },
+                                Child = new LabelledEnumDropdown<OrderType>(true)
+                                {
+                                    Label = "Pick order",
+                                    Description = "Set the order for picks.",
+                                    Items = new[] { OrderType.ABAB, OrderType.ABBA },
+                                    Current = LadderInfo.PickOrder,
+                                    DropdownWidth = 1f,
+                                }
+                            },
+                        }
+                    }
+                },
+                new PhaseStarterDistributionDropdown
+                {
+                    Label = "Phase starters",
+                    Description = "Values are Protect / Ban / Pick. First action in each match determines which team becomes 1 or 2.",
+                    Items = new[]
+                    {
+                        PhaseStarterDistributionType.AllTogether,
+                        PhaseStarterDistributionType.ProtectBanTogether,
+                        PhaseStarterDistributionType.ProtectPickTogether,
+                        PhaseStarterDistributionType.BanPickTogether,
+                    },
+                    Current = LadderInfo.PhaseStarterDistribution,
+                    DropdownWidth = 1f,
+                },
             };
 
             credentials.Changed += () => api.SetOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
         }
 
         private const float aspect_ratio = 16f / 9f;
+
+        private partial class PhaseStarterDistributionDropdown : LabelledEnumDropdown<PhaseStarterDistributionType>
+        {
+            public PhaseStarterDistributionDropdown()
+                : base(true)
+            {
+            }
+
+            protected override OsuDropdown<PhaseStarterDistributionType> CreateDropdown() => new PhaseStarterDistributionOsuDropdown();
+        }
+
+        private partial class PhaseStarterDistributionOsuDropdown : OsuDropdown<PhaseStarterDistributionType>
+        {
+            protected override LocalisableString GenerateItemText(PhaseStarterDistributionType item) => item switch
+            {
+                PhaseStarterDistributionType.AllTogether => "1/1/1 <-> 2/2/2",
+                PhaseStarterDistributionType.ProtectBanTogether => "1/1/2 <-> 2/2/1",
+                PhaseStarterDistributionType.ProtectPickTogether => "1/2/1 <-> 2/1/2",
+                PhaseStarterDistributionType.BanPickTogether => "1/2/2 <-> 2/1/1",
+                _ => item.ToString(),
+            };
+        }
 
         protected override void Update()
         {
