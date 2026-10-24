@@ -27,8 +27,8 @@ namespace osu.Game.Tournament.Screens.MapPool
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
-        private TeamColour pickColour;
-        private ChoiceType pickType;
+        private TeamColour pickColour = TeamColour.Red;
+        private ChoiceType pickType = ChoiceType.Pick;
 
         private OsuButton buttonRedBan = null!;
         private OsuButton buttonBlueBan = null!;
@@ -238,6 +238,7 @@ namespace osu.Game.Tournament.Screens.MapPool
 
             if (phaseStarter == null)
             {
+                // Until the first action establishes the physical team numbering, preserve the manually selected team.
                 setMode(pickColour, nextMode);
                 return;
             }
@@ -354,6 +355,7 @@ namespace osu.Game.Tournament.Screens.MapPool
         {
             base.CurrentMatchChanged(match);
             updateDisplay();
+            setNextMode();
         }
 
         private void updateDisplay()
