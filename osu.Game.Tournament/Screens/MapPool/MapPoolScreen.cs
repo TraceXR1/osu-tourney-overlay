@@ -27,8 +27,8 @@ namespace osu.Game.Tournament.Screens.MapPool
         [Resolved]
         private TournamentSceneManager? sceneManager { get; set; }
 
-        private TeamColour pickColour;
-        private ChoiceType pickType;
+        private TeamColour pickColour = TeamColour.Red;
+        private ChoiceType pickType = ChoiceType.Pick;
 
         private OsuButton buttonRedBan = null!;
         private OsuButton buttonBlueBan = null!;
@@ -204,47 +204,54 @@ namespace osu.Game.Tournament.Screens.MapPool
 
         private void setNextMode()
         {
-            if (CurrentMatch.Value?.Round.Value == null)
+            if (CurrentMatch.Value == null || CurrentMatch.Value.Round.Value == null)
                 return;
 
-            int totalBansRequired = CurrentMatch.Value.Round.Value.BanCount.Value * 2;
             int totalProtectsRequired = CurrentMatch.Value.Round.Value.ProtectCount.Value * 2;
+            int totalBansRequired = CurrentMatch.Value.Round.Value.BanCount.Value * 2;
+            int banCount = CurrentMatch.Value.PicksBans.Count(p => p.Type == ChoiceType.Ban);
 
-            TeamColour lastActionColour = CurrentMatch.Value.PicksBans.LastOrDefault()?.Team
-                                          ?? CurrentMatch.Value.Protects.LastOrDefault()?.Team
-                                          ?? TeamColour.Red;
+            ChoiceType nextMode;
+            int phaseActionCount;
+            OrderType order;
 
-            TeamColour nextColour;
-            bool hasAllProtects = CurrentMatch.Value.Protects.Count >= totalProtectsRequired;
-            bool hasAllBans = CurrentMatch.Value.PicksBans.Count(p => p.Type == ChoiceType.Ban) >= totalBansRequired;
-
-            ChoiceType nextMode = ChoiceType.Pick;
-
-            if (!hasAllProtects)
+            if (CurrentMatch.Value.Protects.Count < totalProtectsRequired)
             {
-                // Protect phase: switch teams every protect.
                 nextMode = ChoiceType.Protect;
-                nextColour = getOppositeTeamColour(lastActionColour);
+                phaseActionCount = CurrentMatch.Value.Protects.Count;
+                order = LadderInfo.ProtectOrder.Value;
             }
-            else if (!hasAllBans)
+            else if (banCount < totalBansRequired)
             {
-                // Ban phase: switch teams every second ban.
                 nextMode = ChoiceType.Ban;
-                nextColour = CurrentMatch.Value.PicksBans.Count(pb => pb.Type == ChoiceType.Ban) % 2 == 1
-                    ? getOppositeTeamColour(lastActionColour)
-                    : lastActionColour;
+                phaseActionCount = banCount;
+                order = LadderInfo.BanOrder.Value;
             }
             else
             {
-                // Pick phase : switch teams every pick, except for the first pick which generally goes to the team that placed the last ban.
-                nextColour = pickType == ChoiceType.Pick
-                    ? getOppositeTeamColour(lastActionColour)
-                    : lastActionColour;
+                nextMode = ChoiceType.Pick;
+                phaseActionCount = CurrentMatch.Value.PicksBans.Count(p => p.Type == ChoiceType.Pick);
+                order = LadderInfo.PickOrder.Value;
             }
 
-            setMode(nextColour, nextMode);
+            TeamColour? phaseStarter = CurrentMatch.Value.GetMapPoolPhaseStarter(nextMode, LadderInfo.PhaseStarterDistribution.Value);
 
-            TeamColour getOppositeTeamColour(TeamColour colour) => colour == TeamColour.Red ? TeamColour.Blue : TeamColour.Red;
+            if (phaseStarter == null)
+            {
+                // Until the first action establishes the physical team numbering, preserve the manually selected team.
+                setMode(pickColour, nextMode);
+                return;
+            }
+
+            bool useStarter = order == OrderType.ABAB
+                ? phaseActionCount % 2 == 0
+                : phaseActionCount % 4 is 0 or 3;
+
+            TeamColour nextColour = useStarter
+                ? phaseStarter.Value
+                : phaseStarter.Value == TeamColour.Red ? TeamColour.Blue : TeamColour.Red;
+
+            setMode(nextColour, nextMode);
         }
 
         protected override bool OnMouseDown(MouseDownEvent e)
@@ -348,6 +355,7 @@ namespace osu.Game.Tournament.Screens.MapPool
         {
             base.CurrentMatchChanged(match);
             updateDisplay();
+            setNextMode();
         }
 
         private void updateDisplay()

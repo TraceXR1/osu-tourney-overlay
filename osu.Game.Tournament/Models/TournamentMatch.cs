@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
+using System.Linq;
 using Newtonsoft.Json;
 using osu.Framework.Bindables;
 using osu.Game.Tournament.Screens.Ladder.Components;
@@ -96,6 +97,45 @@ namespace osu.Game.Tournament.Models
         public TeamColour WinnerColour => Winner == Team1.Value ? TeamColour.Red : TeamColour.Blue;
 
         public int PointsToWin => Round.Value?.BestOf.Value / 2 + 1 ?? 0;
+
+        public TeamColour? GetMapPoolTeamColour(int teamNumber, PhaseStarterDistributionType distribution)
+        {
+            if (teamNumber != 1 && teamNumber != 2)
+                throw new ArgumentOutOfRangeException(nameof(teamNumber), teamNumber, null);
+
+            BeatmapChoice? firstAction = Protects.FirstOrDefault();
+            firstAction ??= PicksBans.FirstOrDefault(choice => choice.Type == ChoiceType.Ban);
+            firstAction ??= PicksBans.FirstOrDefault(choice => choice.Type == ChoiceType.Pick);
+
+            if (firstAction == null)
+                return null;
+
+            int starterTeamNumber = distribution.GetStarterTeamNumber(firstAction.Type);
+            TeamColour actionColour;
+
+            switch (firstAction.Team)
+            {
+                case TeamColour.Red:
+                    actionColour = TeamColour.Red;
+                    break;
+                case TeamColour.Blue:
+                    actionColour = TeamColour.Blue;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(firstAction.Team), firstAction.Team, null);
+            }
+
+            if (teamNumber == starterTeamNumber)
+                return actionColour;
+
+            return actionColour == TeamColour.Red ? TeamColour.Blue : TeamColour.Red;
+        }
+
+        public TeamColour? GetMapPoolPhaseStarter(ChoiceType choiceType, PhaseStarterDistributionType distribution)
+        {
+            int starterTeamNumber = distribution.GetStarterTeamNumber(choiceType);
+            return GetMapPoolTeamColour(starterTeamNumber, distribution);
+        }
 
         /// <summary>
         /// Remove scores from the match, in case of a false click or false start.

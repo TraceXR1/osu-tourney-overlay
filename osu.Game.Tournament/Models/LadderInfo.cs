@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.Serialization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Game.Graphics;
@@ -62,5 +64,35 @@ namespace osu.Game.Tournament.Models
         public Bindable<bool> DisplayTeamSeeds = new BindableBool();
 
         public Bindable<bool> MuteUISounds = new BindableBool(true);
+
+        // Order types for map picking
+        public Bindable<OrderType> ProtectOrder = new Bindable<OrderType>(OrderType.ABAB);
+        public Bindable<OrderType> BanOrder = new Bindable<OrderType>(OrderType.ABAB);
+        public Bindable<OrderType> PickOrder = new Bindable<OrderType>(OrderType.ABAB);
+
+        public Bindable<PhaseStarterDistributionType> PhaseStarterDistribution = new Bindable<PhaseStarterDistributionType>(PhaseStarterDistributionType.ProtectBanTogether);
+    }
+
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum OrderType
+    {
+        ABAB,
+        ABBA
+    }
+
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum PhaseStarterDistributionType
+    {
+        [EnumMember(Value = "1/1/1 <-> 2/2/2")]
+        AllTogether,
+
+        [EnumMember(Value = "1/1/2 <-> 2/2/1")]
+        ProtectBanTogether,
+
+        [EnumMember(Value = "1/2/1 <-> 2/1/2")]
+        ProtectPickTogether,
+
+        [EnumMember(Value = "1/2/2 <-> 2/1/1")]
+        BanPickTogether
     }
 }

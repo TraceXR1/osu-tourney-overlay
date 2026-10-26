@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using osu.Framework.Graphics;
 using osu.Game.Tournament.Models;
@@ -55,6 +56,41 @@ namespace osu.Game.Tournament.Tests.NonVisual
             });
         }
 
+        [TestCase(PhaseStarterDistributionType.AllTogether, "1/1/1 <-> 2/2/2")]
+        [TestCase(PhaseStarterDistributionType.ProtectBanTogether, "1/1/2 <-> 2/2/1")]
+        [TestCase(PhaseStarterDistributionType.ProtectPickTogether, "1/2/1 <-> 2/1/2")]
+        [TestCase(PhaseStarterDistributionType.BanPickTogether, "1/2/2 <-> 2/1/1")]
+        public void TestMapPoolSettingsRoundTrip(PhaseStarterDistributionType distribution, string distributionJsonValue)
+        {
+            var ladder = new LadderInfo
+            {
+                ProtectOrder = { Value = OrderType.ABBA },
+                BanOrder = { Value = OrderType.ABBA },
+                PickOrder = { Value = OrderType.ABBA },
+                PhaseStarterDistribution = { Value = distribution }
+            };
+
+            string serialised = JsonConvert.SerializeObject(ladder, createSerializerSettings());
+            var json = JObject.Parse(serialised);
+            var restored = JsonConvert.DeserializeObject<LadderInfo>(serialised, createSerializerSettings())!;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(json["ProtectOrder"]?.Type, Is.EqualTo(JTokenType.String));
+                Assert.That(json["BanOrder"]?.Type, Is.EqualTo(JTokenType.String));
+                Assert.That(json["PickOrder"]?.Type, Is.EqualTo(JTokenType.String));
+                Assert.That(json["PhaseStarterDistribution"]?.Type, Is.EqualTo(JTokenType.String));
+                Assert.That(json["ProtectOrder"]?.Value<string>(), Is.EqualTo("ABBA"));
+                Assert.That(json["BanOrder"]?.Value<string>(), Is.EqualTo("ABBA"));
+                Assert.That(json["PickOrder"]?.Value<string>(), Is.EqualTo("ABBA"));
+                Assert.That(json["PhaseStarterDistribution"]?.Value<string>(), Is.EqualTo(distributionJsonValue));
+                Assert.That(restored.ProtectOrder.Value, Is.EqualTo(OrderType.ABBA));
+                Assert.That(restored.BanOrder.Value, Is.EqualTo(OrderType.ABBA));
+                Assert.That(restored.PickOrder.Value, Is.EqualTo(OrderType.ABBA));
+                Assert.That(restored.PhaseStarterDistribution.Value, Is.EqualTo(distribution));
+            });
+        }
+
         [Test]
         public void TestOldBracketSideDefaults()
         {
@@ -67,6 +103,10 @@ namespace osu.Game.Tournament.Tests.NonVisual
                 Assert.That(ladder.RedSide.Colour.Value, Is.EqualTo((Colour4)TournamentGame.COLOUR_RED));
                 Assert.That(ladder.BlueSide.Colour.Value, Is.EqualTo((Colour4)TournamentGame.COLOUR_BLUE));
                 Assert.That(ladder.RefereeColour.Value, Is.EqualTo(Colour4.FromHex("FFD966")));
+                Assert.That(ladder.ProtectOrder.Value, Is.EqualTo(OrderType.ABAB));
+                Assert.That(ladder.BanOrder.Value, Is.EqualTo(OrderType.ABAB));
+                Assert.That(ladder.PickOrder.Value, Is.EqualTo(OrderType.ABAB));
+                Assert.That(ladder.PhaseStarterDistribution.Value, Is.EqualTo(PhaseStarterDistributionType.ProtectBanTogether));
             });
         }
 
@@ -90,6 +130,13 @@ namespace osu.Game.Tournament.Tests.NonVisual
             var ladder = JsonConvert.DeserializeObject<LadderInfo>("{}")!;
             Assert.That(ladder.MuteUISounds.Value, Is.True);
         }
+
+        private static JsonSerializerSettings createSerializerSettings() => new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            DefaultValueHandling = DefaultValueHandling.Ignore,
+            Converters = new JsonConverter[] { new JsonPointConverter() }
+        };
 
         private static LadderInfo createSampleLadder()
         {
