@@ -196,11 +196,11 @@ namespace osu.Game.Tournament
 
             if (currentScreen == target) return;
 
-            if (!chromaCollapsed && currentScreen is GameplayScreen gameplayScreen)
+            if (!chromaCollapsed && currentScreen is GameplayScreen or ShowcaseScreen)
             {
                 chromaClosing = true;
                 pendingScreenType = screenType;
-                gameplayScreen.CollapseChroma(() =>
+                collapseChroma(currentScreen, () =>
                 {
                     Type? nextScreen = pendingScreenType;
                     pendingScreenType = null;
@@ -212,7 +212,7 @@ namespace osu.Game.Tournament
                         SetScreen(nextScreen);
                     }
                     else
-                        gameplayScreen.ExpandChroma();
+                        expandChroma(currentScreen);
                 });
                 return;
             }
@@ -263,6 +263,32 @@ namespace osu.Game.Tournament
 
             foreach (var s in buttons.OfType<ScreenButton>())
                 s.IsSelected = screenType == s.Type;
+        }
+
+        private static void collapseChroma(Drawable screen, Action completed)
+        {
+            switch (screen)
+            {
+                case GameplayScreen gameplay:
+                    gameplay.CollapseChroma(completed);
+                    break;
+                case ShowcaseScreen showcase:
+                    showcase.CollapseChroma(completed);
+                    break;
+            }
+        }
+
+        private static void expandChroma(Drawable screen)
+        {
+            switch (screen)
+            {
+                case GameplayScreen gameplay:
+                    gameplay.ExpandChroma();
+                    break;
+                case ShowcaseScreen showcase:
+                    showcase.ExpandChroma();
+                    break;
+            }
         }
 
         private partial class Separator : CompositeDrawable

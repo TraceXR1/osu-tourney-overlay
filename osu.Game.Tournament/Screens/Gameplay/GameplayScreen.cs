@@ -7,9 +7,10 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Framework.Graphics.Cursor;
 using osu.Framework.Threading;
-using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays.Settings;
+using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Tournament.Components;
 using osu.Game.Tournament.IPC;
 using osu.Game.Tournament.Models;
@@ -45,8 +46,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
 
             LabelledSwitchButton chatToggle;
 
-            AddRangeInternal(new Drawable[]
+            AddInternal(new PopoverContainer
             {
+                RelativeSizeAxes = Axes.Both,
+                Child = new Container
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Children = new Drawable[]
+                    {
                 new TourneyVideo("gameplay")
                 {
                     Loop = true,
@@ -115,12 +122,19 @@ namespace osu.Game.Tournament.Screens.Gameplay
                             Current = LadderInfo.ChromaKeyWidth,
                             KeyboardStep = 1,
                         },
+                        new SettingsColour
+                        {
+                            LabelText = "Chroma colour",
+                            Current = LadderInfo.ChromaKeyColour,
+                        },
                         new SettingsSlider<int>
                         {
                             LabelText = "Players per team",
                             Current = LadderInfo.PlayersPerTeam,
                             KeyboardStep = 1,
                         },
+                    }
+                }
                     }
                 }
             });
@@ -269,7 +283,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
             private void load()
             {
                 // chroma key area for stable gameplay
-                Colour = new Color4(0, 255, 0, 255);
+                Colour = ladder.ChromaKeyColour.Value;
+
+                ladder.ChromaKeyColour.BindValueChanged(colour => Colour = colour.NewValue);
 
                 ladder.PlayersPerTeam.BindValueChanged(performLayout, true);
             }
