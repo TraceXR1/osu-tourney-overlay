@@ -8,7 +8,6 @@ using osu.Framework.Graphics.Containers;
 using osu.Game.Tournament.Components;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Cursor;
-using osu.Framework.Threading;
 using osu.Game.Tournament.Models;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays.Settings;
@@ -23,9 +22,6 @@ namespace osu.Game.Tournament.Screens.Showcase
         private LadderInfo ladder { get; set; } = null!;
 
         private Drawable chroma = null!;
-        private const double chroma_open_delay = 200;
-        private const double chroma_transition_duration = 500;
-        private ScheduledDelegate? scheduledChromaOpen;
         private readonly BindableNumber<float> chromaScale = new BindableFloat(1)
         {
             MinValue = 0.25f,
@@ -93,27 +89,19 @@ namespace osu.Game.Tournament.Screens.Showcase
             ladder.ChromaKeyColour.BindValueChanged(colour => chroma.Colour = colour.NewValue);
         }
 
-        public override void Hide()
-        {
-            scheduledChromaOpen?.Cancel();
-            base.Hide();
-        }
-
         public override void Show()
         {
-            scheduledChromaOpen?.Cancel();
             chroma.ClearTransforms();
-            chroma.Scale = Vector2.Zero;
+            chroma.Scale = new Vector2(chromaScale.Value);
             base.Show();
-            scheduledChromaOpen = Scheduler.AddDelayed(ExpandChroma, chroma_open_delay);
         }
 
-        public void ExpandChroma() => chroma.ScaleTo(new Vector2(chromaScale.Value), chroma_transition_duration, Easing.OutQuint);
+        public void ExpandChroma() => chroma.Scale = new Vector2(chromaScale.Value);
 
         public void CollapseChroma(System.Action completed)
         {
-            scheduledChromaOpen?.Cancel();
-            chroma.ScaleTo(Vector2.Zero, chroma_transition_duration, Easing.InQuint).OnComplete(_ => completed());
+            chroma.Scale = Vector2.Zero;
+            completed();
         }
 
         protected override void CurrentMatchChanged(ValueChangedEvent<TournamentMatch?> match)
