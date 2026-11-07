@@ -148,7 +148,6 @@ namespace osu.Game.Tournament.Screens.Gameplay
             chatToggle.Current.BindValueChanged(v => State.Value = v.NewValue ? TourneyState.Idle : TourneyState.Playing);
 
             LadderInfo.ChromaKeyWidth.BindValueChanged(width => chroma.Width = width.NewValue, true);
-
             warmup.BindValueChanged(w => header.ShowScores = !w.NewValue, true);
         }
 
@@ -210,10 +209,8 @@ namespace osu.Game.Tournament.Screens.Gameplay
         {
             try
             {
-                if (State.Value == TourneyState.Ranking)
+                if (State.Value == TourneyState.Ranking && !warmup.Value && CurrentMatch.Value != null)
                 {
-                    if (warmup.Value || CurrentMatch.Value == null) return;
-
                     if (ipc.Score1.Value > ipc.Score2.Value)
                         CurrentMatch.Value.Team1Score.Value++;
                     else if (ipc.Score1.Value < ipc.Score2.Value)
@@ -229,7 +226,7 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         {
                             // if we've returned to idle and the last screen was ranking
                             // we should automatically proceed after a short delay
-                            if (lastState == TourneyState.Ranking && !warmup.Value)
+                            if (lastState == TourneyState.Ranking)
                             {
                                 if (CurrentMatch.Value?.Completed.Value == true)
                                     sceneManager?.SetScreen(typeof(TeamWinScreen));
