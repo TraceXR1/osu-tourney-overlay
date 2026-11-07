@@ -2,12 +2,14 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Cursor;
+using osu.Framework.Testing;
 using osu.Framework.Threading;
 using osu.Game.Overlays.Settings;
 using osu.Game.Graphics.UserInterfaceV2;
@@ -17,6 +19,7 @@ using osu.Game.Tournament.Models;
 using osu.Game.Tournament.Screens.Gameplay.Components;
 using osu.Game.Tournament.Screens.MapPool;
 using osu.Game.Tournament.Screens.TeamWin;
+using osuTK;
 using osuTK.Graphics;
 
 namespace osu.Game.Tournament.Screens.Gameplay
@@ -82,12 +85,14 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                 new ChromaArea
                                 {
                                     Name = "Left chroma",
+                                    IsRightSide = false,
                                     RelativeSizeAxes = Axes.Both,
                                     Width = 0.5f,
                                 },
                                 new ChromaArea
                                 {
                                     Name = "Right chroma",
+                                    IsRightSide = true,
                                     RelativeSizeAxes = Axes.Both,
                                     Anchor = Anchor.TopRight,
                                     Origin = Anchor.TopRight,
@@ -266,16 +271,45 @@ namespace osu.Game.Tournament.Screens.Gameplay
             scheduledChromaOpen = Scheduler.AddDelayed(ExpandChroma, chroma_open_delay);
         }
 
-        public void ExpandChroma() => chroma.ResizeWidthTo(LadderInfo.ChromaKeyWidth.Value, chroma_transition_duration, Easing.OutQuint);
+        public void ExpandChroma()
+        {
+            chroma.Width = LadderInfo.ChromaKeyWidth.Value;
+
+            foreach (var area in chroma.ChildrenOfType<ChromaArea>())
+                area.AnimateWindowsIn();
+        }
 
         public void CollapseChroma(Action completed)
         {
             scheduledChromaOpen?.Cancel();
-            chroma.ResizeWidthTo(0, chroma_transition_duration, Easing.InQuint).OnComplete(_ => completed());
+
+            var areas = chroma.ChildrenOfType<ChromaArea>().ToArray();
+            int remainingAreas = areas.Length;
+
+            if (remainingAreas == 0)
+            {
+                chroma.Width = 0;
+                completed();
+                return;
+            }
+
+            foreach (var area in areas)
+            {
+                area.CollapseWindows(() =>
+                {
+                    if (--remainingAreas == 0)
+                    {
+                        chroma.Width = 0;
+                        completed();
+                    }
+                });
+            }
         }
 
         private partial class ChromaArea : CompositeDrawable
         {
+            public bool IsRightSide { get; init; }
+
             [Resolved]
             private LadderInfo ladder { get; set; } = null!;
 
@@ -295,6 +329,9 @@ namespace osu.Game.Tournament.Screens.Gameplay
                 switch (playerCount.NewValue)
                 {
                     case 3:
+                        Anchor windowAnchor = IsRightSide ? Anchor.TopLeft : Anchor.TopRight;
+                        Anchor bottomWindowAnchor = IsRightSide ? Anchor.BottomLeft : Anchor.BottomRight;
+
                         InternalChildren = new Drawable[]
                         {
                             new Box
@@ -302,14 +339,16 @@ namespace osu.Game.Tournament.Screens.Gameplay
                                 RelativeSizeAxes = Axes.Both,
                                 Width = 0.5f,
                                 Height = 0.5f,
-                                Anchor = Anchor.TopCentre,
-                                Origin = Anchor.TopCentre,
+                                Anchor = windowAnchor,
+                                Origin = windowAnchor,
+                                RelativePositionAxes = Axes.X,
+                                Position = new Vector2(IsRightSide ? 0.25f : -0.25f, 0),
                             },
                             new Box
                             {
                                 RelativeSizeAxes = Axes.Both,
-                                Anchor = Anchor.BottomLeft,
-                                Origin = Anchor.BottomLeft,
+                                Anchor = bottomWindowAnchor,
+                                Origin = bottomWindowAnchor,
                                 Height = 0.5f,
                             },
                         };
@@ -319,8 +358,44 @@ namespace osu.Game.Tournament.Screens.Gameplay
                         InternalChild = new Box
                         {
                             RelativeSizeAxes = Axes.Both,
+                            Anchor = IsRightSide ? Anchor.CentreLeft : Anchor.CentreRight,
+                            Origin = IsRightSide ? Anchor.CentreLeft : Anchor.CentreRight,
                         };
                         break;
+                }
+            }
+
+            public void AnimateWindowsIn()
+            {
+                var windows = InternalChildren.OfType<Box>().ToArray();
+
+                foreach (var window in windows)
+                {
+                    window.ClearTransforms();
+                    window.Scale = new Vector2(0, 1);
+                    window.ScaleTo(Vector2.One, chroma_transition_duration, Easing.OutQuint);
+                }
+            }
+
+            public void CollapseWindows(Action completed)
+            {
+                var windows = InternalChildren.OfType<Box>().ToArray();
+                int remainingWindows = windows.Length;
+
+                if (remainingWindows == 0)
+                {
+                    completed();
+                    return;
+                }
+
+                foreach (var window in windows)
+                {
+                    window.ScaleTo(new Vector2(0, 1), chroma_transition_duration, Easing.InQuint)
+                          .OnComplete(_ =>
+                          {
+                              if (--remainingWindows == 0)
+                                  completed();
+                          });
                 }
             }
         }
