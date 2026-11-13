@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
+using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Primitives;
@@ -17,8 +18,6 @@ using osu.Game.Extensions;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Models;
-using osu.Game.Online.API;
-using osu.Game.Online.API.Requests;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.Menu;
@@ -43,7 +42,7 @@ namespace osu.Game.Tournament.Components
         private IBindable<RulesetInfo> ruleset { get; set; } = null!;
 
         [Resolved]
-        private IAPIProvider api { get; set; } = null!;
+        private TournamentBeatmapAttributesCache attributesCache { get; set; } = null!;
 
         public IBeatmapInfo? Beatmap
         {
@@ -307,17 +306,23 @@ namespace osu.Game.Tournament.Components
             if (convertedMods.Length == 0)
                 return;
 
-            var request = new GetBeatmapAttributesRequest(currentBeatmap.OnlineID, ruleset.Value.ShortName, convertedMods.Select(mod => mod.Acronym).ToArray());
-            request.Success += response =>
+            var ratingTask = attributesCache.GetStarRatingAsync(currentBeatmap.OnlineID, ruleset.Value.ShortName, convertedMods.Select(mod => mod.Acronym).ToArray());
+            ratingTask.ContinueWith(task =>
             {
-                if (requestGeneration != starRatingRequestGeneration)
+                if (!task.IsCompletedSuccessfully)
                     return;
 
-                moddedStarRating = response.Attributes?.StarRating;
-                refreshContent();
-            };
+                Scheduler.AddOnce(() =>
+                {
+                    if (requestGeneration != starRatingRequestGeneration)
+                        return;
 
-            api.Queue(request);
+                    moddedStarRating = task.GetResultSafely();
+
+                    if (moddedStarRating.HasValue)
+                        refreshContent();
+                });
+            });
         }
 
         private DiffPiece createStarRatingPiece(double baseStarRating, string fallbackSuffix, IReadOnlyCollection<Mod> convertedMods)
