@@ -130,7 +130,12 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
 
             score.BindValueChanged(val =>
             {
-                scoreText.Text = val.NewValue?.ToString() ?? string.Empty;
+                scoreText.Text = val.NewValue switch
+                {
+                    -1 => "FF",
+                    null => string.Empty,
+                    _ => val.NewValue.Value.ToString()
+                };
                 updateWinStyle();
             }, true);
         }
@@ -147,7 +152,9 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
 
             if (e.Button == MouseButton.Left)
             {
-                if (score.Value == null)
+                if (score.Value == -1)
+                    score.Value = 0;
+                else if (score.Value == null)
                 {
                     match.StartMatch();
                 }
@@ -159,6 +166,12 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
                 if (match.Progression.Value?.Completed.Value == true)
                     // don't allow changing scores if the match has a progression. can cause large data loss
                     return false;
+
+                if (match.Completed.Value && match.Loser == Team && score.Value == 0)
+                {
+                    score.Value = -1;
+                    return true;
+                }
 
                 if (match.Completed.Value && match.Winner != Team)
                     // don't allow changing scores from the non-winner
