@@ -1,0 +1,201 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Target branch
+        required: true
+        type: string
+      var:
+        description: Variant identifier
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      file_version: ${{ steps.version.outputs.file_version }}
+      commit: ${{ steps.version.outputs.commit }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Calculate release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VAR: ${{ inputs.var }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_VAR" =~ ^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]]; then
+            if [[ -n "$RELEASE_VAR" ]]; then
+              echo "Var must contain dot-separated SemVer prerelease identifiers (letters, numbers, and hyphens)." >&2
+              exit 1
+            fi
+          fi
+
+          upstream_version="$(tr -d '[:space:]' < upstream-version.txt)"
+          if [[ ! "$upstream_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "upstream-version.txt must contain a numeric upstream version (for example 2026.611.0)." >&2
+            exit 1
+          fi
+
+          release_date="$(date -u +%Y.%m%d)"
+          existing_versions="$(gh release list --repo "$REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')"
+          micro=0
+          while IFS= read -r tag; do
+            if [[ "$tag" =~ ^${release_date}\.([0-9]+)(-|\+|$) ]] && (( BASH_REMATCH[1] >= micro )); then
+              micro=$((BASH_REMATCH[1] + 1))
+            fi
+          done <<< "$existing_versions"
+
+          version="${release_date}.${micro}"
+          file_version="${release_date}.${micro}"
+          if [[ -n "$RELEASE_VAR" ]]; then
+            version+="-${RELEASE_VAR}"
+          fi
+          version+="+${upstream_version}"
+
+          commit="$(git rev-parse HEAD)"
+          if gh release view "$version" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $version already exists." >&2
+            exit 1
+          fi
+
+          previous_tag=""
+          while IFS= read -r tag; do
+            tag_commit="$(git rev-parse -q --verify "refs/tags/$tag^{commit}" || true)"
+            if [[ -n "$tag_commit" ]] && git merge-base --is-ancestor "$tag_commit" "$commit"; then
+              previous_tag="$tag"
+              break
+            fi
+          done < <(gh release list --repo "$REPOSITORY" --limit 1000 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[].tagName')
+
+          {
+            echo "version=$version"
+            echo "file_version=$file_version"
+            echo "commit=$commit"
+            echo "previous_tag=$previous_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes from commit titles
+        env:
+          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            git log --first-parent --format='- %s' "$PREVIOUS_TAG..$COMMIT" > release-notes.md
+          else
+            git log --first-parent --format='- %s' "$COMMIT" > release-notes.md
+          fi
+          if [[ ! -s release-notes.md ]]; then
+            echo "- Maintenance release." > release-notes.md
+          fi
+          {
+            echo '### Changes'
+            echo
+            cat release-notes.md
+            echo
+            echo "Source commit: \`$COMMIT\`."
+          } > release-body.md
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-body.md
+          if-no-files-found: error
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish Linux x64
+        run: dotnet publish osu.Desktop/osu.Desktop.csproj --configuration Release --runtime linux-x64 --self-contained true --output publish/linux-x64 -p:Version='${{ needs.prepare.outputs.version }}' -p:FileVersion='${{ needs.prepare.outputs.file_version }}'
+
+      - name: Create Linux archive
+        run: tar -C publish/linux-x64 -czf osu-tourney-${{ needs.prepare.outputs.version }}-linux-x64.tar.gz .
+
+      - name: Upload Linux archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-x64
+          path: osu-tourney-*-linux-x64.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish Windows x64
+        run: dotnet publish osu.Desktop/osu.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true --output publish/win-x64 -p:Version='${{ needs.prepare.outputs.version }}' -p:FileVersion='${{ needs.prepare.outputs.file_version }}'
+
+      - name: Create Windows archive
+        run: Compress-Archive -Path publish/win-x64/* -DestinationPath osu-tourney-${{ needs.prepare.outputs.version }}-win-x64.zip
+
+      - name: Upload Windows archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-x64
+          path: osu-tourney-*-win-x64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      - name: Download platform archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*-x64'
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh release create "$RELEASE_VERSION" --repo "$REPOSITORY" --target "$RELEASE_COMMIT" --title "$RELEASE_VERSION" --notes-file release-body.md osu-tourney-*-linux-x64.tar.gz osu-tourney-*-win-x64.zip
