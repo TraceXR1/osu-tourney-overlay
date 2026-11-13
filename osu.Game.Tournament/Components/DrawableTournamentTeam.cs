@@ -18,7 +18,7 @@ namespace osu.Game.Tournament.Components
         protected readonly TournamentSpriteText AcronymText;
 
         [UsedImplicitly]
-        private Bindable<string>? acronym;
+        private Bindable<string>? fullName;
 
         protected DrawableTournamentTeam(TournamentTeam? team)
         {
@@ -37,7 +37,7 @@ namespace osu.Game.Tournament.Components
             if (Team == null)
                 return;
 
-            (acronym = Team.Acronym.GetBoundCopy()).BindValueChanged(_ => AcronymText.Text = Team?.Acronym.Value?.ToUpperInvariant() ?? string.Empty, true);
+            (fullName = Team.FullName.GetBoundCopy()).BindValueChanged(_ => AcronymText.Text = Team?.FullName.Value ?? string.Empty, true);
         }
     }
 }

@@ -43,7 +43,7 @@ namespace osu.Game.Tournament.Screens.Schedule
                 new Container
                 {
                     RelativeSizeAxes = Axes.Both,
-                    Padding = new MarginPadding(100) { Bottom = 50 },
+                    Padding = new MarginPadding { Horizontal = 30, Vertical = 100, Bottom = 50 },
                     Children = new Drawable[]
                     {
                         new GridContainer
@@ -154,13 +154,13 @@ namespace osu.Game.Tournament.Screens.Schedule
                                 new ScheduleContainer("recent matches")
                                 {
                                     RelativeSizeAxes = Axes.Both,
-                                    Width = 0.4f,
+                                    Width = 0.48f,
                                     ChildrenEnumerable = recent.Select(p => new ScheduleMatch(p))
                                 },
                                 new ScheduleContainer("upcoming matches")
                                 {
                                     RelativeSizeAxes = Axes.Both,
-                                    Width = 0.6f,
+                                    Width = 0.52f,
                                     ChildrenEnumerable = upcoming.Select(p => new ScheduleMatch(p))
                                 },
                             }
@@ -192,14 +192,14 @@ namespace osu.Game.Tournament.Screens.Schedule
                         {
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft,
-                            Scale = new Vector2(0.5f)
+                            Scale = new Vector2(0.4f)
                         },
                         new TournamentSpriteText
                         {
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft,
                             Text = currentMatch.Value.Team1.Value?.FullName + " vs " + currentMatch.Value.Team2.Value?.FullName,
-                            Font = OsuFont.Torus.With(size: 24, weight: FontWeight.SemiBold)
+                            Font = OsuFont.Torus.With(size: 18, weight: FontWeight.SemiBold)
                         },
                         new FillFlowContainer
                         {
@@ -211,7 +211,7 @@ namespace osu.Game.Tournament.Screens.Schedule
                             {
                                 new ScheduleMatchDate(currentMatch.Value.Date.Value)
                                 {
-                                    Font = OsuFont.Torus.With(size: 24, weight: FontWeight.Regular)
+                                    Font = OsuFont.Torus.With(size: 18, weight: FontWeight.Regular)
                                 }
                             }
                         },
