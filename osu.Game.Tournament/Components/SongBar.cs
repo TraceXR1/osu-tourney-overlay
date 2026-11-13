@@ -479,7 +479,7 @@ namespace osu.Game.Tournament.Components
                             s.Colour = contentColour.Value;
                     });
 
-                    if (contentColour == colours.Red1)
+                    if (heading != "Length" && contentColour == colours.Red1)
                     {
                         AddArbitraryDrawable(new SpriteIcon
                         {
@@ -489,7 +489,7 @@ namespace osu.Game.Tournament.Components
                             Margin = new MarginPadding { Right = 2 },
                         });
                     }
-                    else if (contentColour == colours.Green1)
+                    else if (heading != "Length" && contentColour == colours.Green1)
                     {
                         AddArbitraryDrawable(new SpriteIcon
                         {
