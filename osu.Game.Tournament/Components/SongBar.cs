@@ -15,7 +15,10 @@ using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Extensions;
 using osu.Game.Graphics;
+using osu.Game.Graphics.Containers;
 using osu.Game.Models;
+using osu.Game.Online.API;
+using osu.Game.Online.API.Requests;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.Menu;
@@ -30,11 +33,17 @@ namespace osu.Game.Tournament.Components
     {
         private IBeatmapInfo? beatmap;
         private TournamentRound? round;
+        private OsuColour colours = new OsuColour();
+        private double? moddedStarRating;
+        private int starRatingRequestGeneration;
 
         public const float HEIGHT = 145 / 2f;
 
         [Resolved]
         private IBindable<RulesetInfo> ruleset { get; set; } = null!;
+
+        [Resolved]
+        private IAPIProvider api { get; set; } = null!;
 
         public IBeatmapInfo? Beatmap
         {
@@ -44,6 +53,7 @@ namespace osu.Game.Tournament.Components
                     return;
 
                 beatmap = value;
+                updateModdedStarRating();
                 refreshContent();
             }
         }
@@ -68,7 +78,11 @@ namespace osu.Game.Tournament.Components
             get => mods;
             set
             {
+                if (mods == value)
+                    return;
+
                 mods = value;
+                updateModdedStarRating();
                 refreshContent();
             }
         }
@@ -93,6 +107,7 @@ namespace osu.Game.Tournament.Components
         [BackgroundDependencyLoader]
         private void load(OsuColour colours)
         {
+            this.colours = colours;
             RelativeSizeAxes = Axes.X;
             AutoSizeAxes = Axes.Y;
 
@@ -158,33 +173,47 @@ namespace osu.Game.Tournament.Components
                 srExtra = "*";
             }
 
-            (string heading, string content)[] stats;
+            Color4? getStatColour(string stat)
+            {
+                bool increasedByHardRock = convertedMods.Any(x => x is ModHardRock) && stat is "CS" or "AR" or "OD";
+                bool increasedByDoubleTime = convertedMods.Any(x => x is ModDoubleTime) && stat is "AR" or "OD" or "BPM" or "Length";
+
+                if (increasedByHardRock || increasedByDoubleTime)
+                    return colours.Red1;
+
+                if (convertedMods.Any(x => x is ModEasy) && stat is "CS" or "AR" or "OD")
+                    return colours.Green1;
+
+                return null;
+            }
+
+            (string heading, string content, Color4? colour)[] stats;
 
             switch (ruleset.Value.OnlineID)
             {
                 default:
-                    stats = new (string heading, string content)[]
+                    stats = new (string heading, string content, Color4? colour)[]
                     {
-                        ("CS", $"{adjustedDifficulty.CircleSize:0.#}"),
-                        ("AR", $"{adjustedDifficulty.ApproachRate:0.#}"),
-                        ("OD", $"{adjustedDifficulty.OverallDifficulty:0.#}"),
+                        ("CS", $"{adjustedDifficulty.CircleSize:0.#}", getStatColour("CS")),
+                        ("AR", $"{adjustedDifficulty.ApproachRate:0.#}", getStatColour("AR")),
+                        ("OD", $"{adjustedDifficulty.OverallDifficulty:0.#}", getStatColour("OD")),
                     };
                     break;
 
                 case 1:
                 case 3:
-                    stats = new (string heading, string content)[]
+                    stats = new (string heading, string content, Color4? colour)[]
                     {
-                        ("OD", $"{adjustedDifficulty.OverallDifficulty:0.#}"),
-                        ("HP", $"{adjustedDifficulty.DrainRate:0.#}")
+                        ("OD", $"{adjustedDifficulty.OverallDifficulty:0.#}", getStatColour("OD")),
+                        ("HP", $"{adjustedDifficulty.DrainRate:0.#}", getStatColour("HP"))
                     };
                     break;
 
                 case 2:
-                    stats = new (string heading, string content)[]
+                    stats = new (string heading, string content, Color4? colour)[]
                     {
-                        ("CS", $"{adjustedDifficulty.CircleSize:0.#}"),
-                        ("AR", $"{adjustedDifficulty.ApproachRate:0.#}"),
+                        ("CS", $"{adjustedDifficulty.CircleSize:0.#}", getStatColour("CS")),
+                        ("AR", $"{adjustedDifficulty.ApproachRate:0.#}", getStatColour("AR")),
                     };
                     break;
             }
@@ -224,8 +253,8 @@ namespace osu.Game.Tournament.Components
                                         Direction = FillDirection.Vertical,
                                         Children = new Drawable[]
                                         {
-                                            new DiffPiece(stats),
-                                            new DiffPiece(("Star Rating", $"{beatmap.StarRating.FormatStarRating()}{srExtra}"))
+                                            new DiffPiece(colours, stats),
+                                            createStarRatingPiece(beatmap.StarRating, srExtra, convertedMods)
                                         }
                                     },
                                     new FillFlowContainer
@@ -237,8 +266,8 @@ namespace osu.Game.Tournament.Components
                                         Direction = FillDirection.Vertical,
                                         Children = new Drawable[]
                                         {
-                                            new DiffPiece(("Length", length.ToFormattedDuration().ToString())),
-                                            new DiffPiece(("BPM", $"{bpm:0.#}")),
+                                            new DiffPiece(colours, ("Length", length.ToFormattedDuration().ToString(), getStatColour("Length"))),
+                                            new DiffPiece(colours, ("BPM", $"{bpm:0.#}", getStatColour("BPM"))),
                                         }
                                     },
                                     new Container
@@ -263,6 +292,51 @@ namespace osu.Game.Tournament.Components
                     Origin = Anchor.BottomRight,
                 }
             };
+        }
+
+        private void updateModdedStarRating()
+        {
+            int requestGeneration = ++starRatingRequestGeneration;
+            moddedStarRating = null;
+
+            if (beatmap is not TournamentBeatmap currentBeatmap || currentBeatmap.OnlineID <= 0)
+                return;
+
+            var convertedMods = ruleset.Value.CreateInstance().ConvertFromLegacyMods(mods).ToArray();
+
+            if (convertedMods.Length == 0)
+                return;
+
+            var request = new GetBeatmapAttributesRequest(currentBeatmap.OnlineID, ruleset.Value.ShortName, convertedMods.Select(mod => mod.Acronym).ToArray());
+            request.Success += response =>
+            {
+                if (requestGeneration != starRatingRequestGeneration)
+                    return;
+
+                moddedStarRating = response.Attributes?.StarRating;
+                refreshContent();
+            };
+
+            api.Queue(request);
+        }
+
+        private DiffPiece createStarRatingPiece(double baseStarRating, string fallbackSuffix, IReadOnlyCollection<Mod> convertedMods)
+        {
+            string displayValue = moddedStarRating?.FormatStarRating().ToString()
+                                  ?? $"{baseStarRating.FormatStarRating()}{fallbackSuffix}";
+            string originalValue = moddedStarRating.HasValue ? $" ({baseStarRating.FormatStarRating()})" : string.Empty;
+
+            Color4? colour = null;
+
+            if (moddedStarRating.HasValue)
+            {
+                if (convertedMods.Any(mod => mod is ModHidden || mod is ModHardRock || mod is ModDoubleTime))
+                    colour = colours.Red1;
+                else if (convertedMods.Any(mod => mod is ModEasy))
+                    colour = colours.Green1;
+            }
+
+            return new DiffPiece(colours, ("Star Rating", displayValue, colour), originalValue);
         }
 
         private Drawable createSlotDisplay()
@@ -360,9 +434,19 @@ namespace osu.Game.Tournament.Components
             };
         }
 
-        public partial class DiffPiece : TextFlowContainer
+        public partial class DiffPiece : OsuTextFlowContainer
         {
-            public DiffPiece(params (string heading, string content)[] tuples)
+            public DiffPiece(OsuColour colours, params (string heading, string content, Color4? contentColour)[] tuples)
+                : this(tuples, null, colours)
+            {
+            }
+
+            public DiffPiece(OsuColour colours, (string heading, string content, Color4? contentColour) tuple, string? uncolouredSuffix)
+                : this(new[] { tuple }, uncolouredSuffix, colours)
+            {
+            }
+
+            private DiffPiece((string heading, string content, Color4? contentColour)[] tuples, string? uncolouredSuffix, OsuColour colours)
             {
                 Margin = new MarginPadding { Horizontal = 15, Vertical = 1 };
                 AutoSizeAxes = Axes.Both;
@@ -374,7 +458,7 @@ namespace osu.Game.Tournament.Components
 
                 for (int i = 0; i < tuples.Length; i++)
                 {
-                    (string heading, string content) = tuples[i];
+                    (string heading, string content, Color4? contentColour) = tuples[i];
 
                     if (i > 0)
                     {
@@ -387,7 +471,43 @@ namespace osu.Game.Tournament.Components
 
                     AddText(new TournamentSpriteText { Text = heading }, s => cp(s, false));
                     AddText(" ", s => cp(s, false));
-                    AddText(new TournamentSpriteText { Text = content }, s => cp(s, true));
+                    AddText(new TournamentSpriteText { Text = content }, s =>
+                    {
+                        cp(s, true);
+
+                        if (contentColour.HasValue)
+                            s.Colour = contentColour.Value;
+                    });
+
+                    if (contentColour == colours.Red1)
+                    {
+                        AddArbitraryDrawable(new SpriteIcon
+                        {
+                            Icon = FontAwesome.Solid.CaretUp,
+                            Size = new Vector2(8, 12),
+                            Colour = colours.Red1,
+                            Margin = new MarginPadding { Right = 2 },
+                        });
+                    }
+                    else if (contentColour == colours.Green1)
+                    {
+                        AddArbitraryDrawable(new SpriteIcon
+                        {
+                            Icon = FontAwesome.Solid.CaretDown,
+                            Size = new Vector2(8, 12),
+                            Colour = colours.Green1,
+                            Margin = new MarginPadding { Right = 2 },
+                        });
+                    }
+
+                    if (i == tuples.Length - 1 && !string.IsNullOrEmpty(uncolouredSuffix))
+                    {
+                        AddText(uncolouredSuffix, s =>
+                        {
+                            cp(s, true);
+                            s.Colour = Color4.White;
+                        });
+                    }
                 }
             }
         }
