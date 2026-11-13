@@ -1,6 +1,8 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -17,6 +19,7 @@ using osu.Game.Models;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.Menu;
+using osu.Game.Tournament.Models;
 using osu.Game.Utils;
 using osuTK;
 using osuTK.Graphics;
@@ -26,6 +29,7 @@ namespace osu.Game.Tournament.Components
     public partial class SongBar : CompositeDrawable
     {
         private IBeatmapInfo? beatmap;
+        private TournamentRound? round;
 
         public const float HEIGHT = 145 / 2f;
 
@@ -40,6 +44,19 @@ namespace osu.Game.Tournament.Components
                     return;
 
                 beatmap = value;
+                refreshContent();
+            }
+        }
+
+        public TournamentRound? Round
+        {
+            get => round;
+            set
+            {
+                if (round == value)
+                    return;
+
+                round = value;
                 refreshContent();
             }
         }
@@ -187,6 +204,12 @@ namespace osu.Game.Tournament.Components
                         new GridContainer
                         {
                             RelativeSizeAxes = Axes.Both,
+                            ColumnDimensions = new[]
+                            {
+                                new Dimension(GridSizeMode.Relative, 0.25f),
+                                new Dimension(GridSizeMode.Relative, 0.25f),
+                                new Dimension(GridSizeMode.Relative, 0.47f),
+                            },
 
                             Content = new[]
                             {
@@ -221,23 +244,9 @@ namespace osu.Game.Tournament.Components
                                     new Container
                                     {
                                         RelativeSizeAxes = Axes.Both,
-                                        Children = new Drawable[]
+                                        Children = new[]
                                         {
-                                            new Box
-                                            {
-                                                Colour = Color4.Black,
-                                                RelativeSizeAxes = Axes.Both,
-                                                Alpha = 0.1f,
-                                            },
-                                            new OsuLogo
-                                            {
-                                                Triangles = false,
-                                                Scale = new Vector2(0.08f),
-                                                Margin = new MarginPadding(50),
-                                                X = -10,
-                                                Anchor = Anchor.CentreRight,
-                                                Origin = Anchor.CentreRight,
-                                            },
+                                            createSlotDisplay(),
                                         }
                                     },
                                 },
@@ -253,6 +262,101 @@ namespace osu.Game.Tournament.Components
                     Anchor = Anchor.BottomRight,
                     Origin = Anchor.BottomRight,
                 }
+            };
+        }
+
+        private Drawable createSlotDisplay()
+        {
+            if (round == null)
+            {
+                return new OsuLogo
+                {
+                    Triangles = false,
+                    Scale = new Vector2(0.08f),
+                    Margin = new MarginPadding(50),
+                    X = -10,
+                    Anchor = Anchor.CentreRight,
+                    Origin = Anchor.CentreRight,
+                };
+            }
+
+            const int columns = 8;
+            var beatmaps = round.Beatmaps.ToArray();
+            int rowCount = Math.Max(1, (beatmaps.Length + columns - 1) / columns);
+            var rows = new Drawable[rowCount][];
+            var slotsPerMod = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            string[] labels = new string[beatmaps.Length];
+
+            for (int i = 0; i < beatmaps.Length; i++)
+            {
+                string mod = beatmaps[i].Mods;
+                slotsPerMod.TryGetValue(mod, out int modSlot);
+                labels[i] = $"{mod}{++modSlot}";
+                slotsPerMod[mod] = modSlot;
+            }
+
+            for (int rowIndex = 0; rowIndex < rows.Length; rowIndex++)
+            {
+                int startIndex = rowIndex * columns;
+                int slotCount = Math.Min(columns, beatmaps.Length - startIndex);
+                var row = new Drawable[slotCount];
+
+                for (int column = 0; column < slotCount; column++)
+                {
+                    int index = startIndex + column;
+                    bool isCurrent = beatmap is TournamentBeatmap currentBeatmap
+                                     && currentBeatmap.OnlineID > 0
+                                     && beatmaps[index].Beatmap?.OnlineID == currentBeatmap.OnlineID;
+
+                    if (isCurrent)
+                    {
+                        row[column] = new TournamentSpriteText
+                        {
+                            Text = labels[index],
+                            Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 16),
+                            Colour = new Color4(1f, 0.906f, 0.498f, 1f),
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                        };
+                    }
+                    else
+                    {
+                        row[column] = new TournamentSpriteText
+                        {
+                            Text = labels[index],
+                            Font = OsuFont.Torus.With(weight: FontWeight.Bold, size: 16),
+                            Anchor = Anchor.Centre,
+                            Origin = Anchor.Centre,
+                            Colour = Color4.White,
+                        };
+                    }
+                }
+
+                rows[rowIndex] = row;
+            }
+
+            return new FillFlowContainer
+            {
+                RelativeSizeAxes = Axes.X,
+                AutoSizeAxes = Axes.Y,
+                Direction = FillDirection.Vertical,
+                Spacing = new Vector2(0, 2),
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                Children = rows.Select(row => (Drawable)new Container
+                {
+                    RelativeSizeAxes = Axes.X,
+                    Height = 20,
+                    Child = new FillFlowContainer
+                    {
+                        AutoSizeAxes = Axes.Both,
+                        Direction = FillDirection.Horizontal,
+                        Spacing = new Vector2(20, 0),
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        Children = row,
+                    }
+                }).ToArray(),
             };
         }
 
