@@ -42,6 +42,5 @@ namespace osu.Game.Tournament.Screens.Setup
             Button.Enabled.Value = !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
             Changed?.Invoke();
         }
-
     }
 }

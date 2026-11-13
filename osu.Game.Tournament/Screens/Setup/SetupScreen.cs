@@ -1,7 +1,6 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-
 using System.Drawing;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
@@ -49,7 +48,9 @@ namespace osu.Game.Tournament.Screens.Setup
         private readonly IBindable<APIUser> localUser = new Bindable<APIUser>();
         private Bindable<Size> windowSize = null!;
         private ApiCredentialsControl credentials = null!;
+        private ActionableInfo? passwordGrantInfo;
         private readonly IBindable<APIState> apiState = new Bindable<APIState>();
+
         [Resolved]
         private TournamentGameBase tournamentGame { get; set; } = null!;
 
@@ -94,12 +95,26 @@ namespace osu.Game.Tournament.Screens.Setup
 
         private void updateAuthenticationDescription()
         {
-            credentials.Description = api.State.Value == APIState.Online
-                ? "Authenticated using client ID and secret!"
-                : "In order to access API please input your valid client ID and secret into the fields";
+            if (api.Endpoints.UseAuthorizationCode && credentials != null)
+            {
+                credentials.Description = api.State.Value == APIState.Online
+                    ? "Authenticated using client ID and secret!"
+                    : "In order to access API please input your valid client ID and secret into the fields";
+            }
+            else if (passwordGrantInfo != null)
+            {
+                passwordGrantInfo.Value = api.State.Value == APIState.Online
+                    ? $"Authenticated as {localUser.Value.Username}"
+                    : "Not authenticated";
+                passwordGrantInfo.Failing = api.State.Value != APIState.Online;
+            }
         }
 
-        private void saveCredentials() => api.SetOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
+        private void saveCredentials()
+        {
+            if (api.Endpoints.UseAuthorizationCode && credentials != null)
+                tournamentGame.SetTournamentOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
+        }
 
         protected override void Dispose(bool isDisposing)
         {
@@ -110,6 +125,18 @@ namespace osu.Game.Tournament.Screens.Setup
         private void reload()
         {
             var fileBasedIpc = ipc as FileBasedIPC;
+            var clientCredentials = new Bindable<bool>(api.Endpoints.UseAuthorizationCode);
+            clientCredentials.ValueChanged += e =>
+            {
+                api.Endpoints.UseAuthorizationCode = e.NewValue;
+                if (e.NewValue)
+                    tournamentGame.UseStoredClientCredentials();
+                else
+                    tournamentGame.UsePasswordGrantClientCredentials();
+                api.Logout();
+                Schedule(reload);
+            };
+            passwordGrantInfo = null;
             fillFlow.Children = new Drawable[]
             {
                 new ActionableInfo
@@ -122,37 +149,51 @@ namespace osu.Game.Tournament.Screens.Setup
                     Description =
                         "The osu!stable installation which is currently being used as a data source. If a source is not found, make sure you have created an empty ipc.txt in your stable cutting-edge installation."
                 },
-                credentials = new ApiCredentialsControl(api.Endpoints.APIClientID, api.Endpoints.APIClientSecret)
+                new LabelledSwitchButton
                 {
-                    Label = "API Credentials",
-                    ButtonText = api.Endpoints.UseAuthorizationCode ? "Login" : "Change sign-in",
-                    Action = () =>
-                    {
-                        api.SetOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
-                        if (api.Endpoints.UseAuthorizationCode)
-                        {
-                            api.RequestOAuthAuthorization();
-                            return;
-                        }
-                        api.Logout();
-
-                        if (loginOverlay == null)
-                        {
-                            AddInternal(loginOverlay = new LoginOverlay
-                            {
-                                Anchor = Anchor.TopRight,
-                                Origin = Anchor.TopRight,
-                            });
-                        }
-
-                        loginOverlay.State.Value = Visibility.Visible;
-                    },
-                    Value = string.Empty,
-                    Failing = api.IsLoggedIn != true,
-                    Description = api.State.Value == APIState.Online
-                        ? "Authenticated using client ID and secret!"
-                        : "In order to access API please input your valid client ID and secret into the fields"
+                    Label = "Client Credentials",
+                    Description = "Use OAuth client credentials instead of your osu! username and password.",
+                    Current = clientCredentials,
                 },
+                api.Endpoints.UseAuthorizationCode
+                    ? credentials = new ApiCredentialsControl(api.Endpoints.APIClientID, api.Endpoints.APIClientSecret)
+                    {
+                        Label = "API Authentication",
+                        ButtonText = "Login",
+                        Action = () =>
+                        {
+                            tournamentGame.SetTournamentOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
+                            api.RequestOAuthAuthorization();
+                        },
+                        Description = api.State.Value == APIState.Online
+                            ? "Authenticated using client ID and secret!"
+                            : "In order to access API please input your valid client ID and secret into the fields"
+                    }
+                    : passwordGrantInfo = new ActionableInfo
+                    {
+                        Label = "API Authentication",
+                        ButtonText = api.State.Value == APIState.Online ? "Change sign-in" : "Login",
+                        Action = () =>
+                        {
+                            api.Logout();
+
+                            if (loginOverlay == null)
+                            {
+                                AddInternal(loginOverlay = new LoginOverlay
+                                {
+                                    Anchor = Anchor.TopRight,
+                                    Origin = Anchor.TopRight,
+                                });
+                            }
+
+                            loginOverlay.State.Value = Visibility.Visible;
+                        },
+                        Value = api.State.Value == APIState.Online
+                            ? $"Authenticated as {localUser.Value.Username}"
+                            : "Not authenticated",
+                        Failing = api.State.Value != APIState.Online,
+                        Description = "Sign in with an osu! account using the login window."
+                    },
                 new LabelledDropdown<RulesetInfo?>(padded: true)
                 {
                     Label = "Ruleset",
@@ -325,7 +366,9 @@ namespace osu.Game.Tournament.Screens.Setup
                 },
             };
 
-            credentials.Changed += () => api.SetOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
+            if (api.Endpoints.UseAuthorizationCode)
+                credentials.Changed += () => tournamentGame.SetTournamentOAuthCredentials(credentials.ClientId, credentials.ClientSecret);
+            updateAuthenticationDescription();
         }
 
         private const float aspect_ratio = 16f / 9f;

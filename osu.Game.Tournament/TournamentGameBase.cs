@@ -44,6 +44,10 @@ namespace osu.Game.Tournament
         public event Action? SavingChanges;
         private Storage credentialStorage = null!;
         private const string credentials_filename = "tournament-oauth.json";
+        private string defaultApiClientId = string.Empty;
+        private string defaultApiClientSecret = string.Empty;
+        private string savedApiClientId = string.Empty;
+        private string savedApiClientSecret = string.Empty;
 
         protected Task BracketLoadTask => bracketLoadTaskCompletionSource.Task;
 
@@ -59,15 +63,13 @@ namespace osu.Game.Tournament
             if (UseDevelopmentServer)
             {
                 var endpoints = base.CreateEndpoints();
-                endpoints.UseAuthorizationCode = true;
+                endpoints.UseAuthorizationCode = false;
                 return endpoints;
             }
 
             return new ProductionEndpointConfiguration
             {
-                UseAuthorizationCode = true,
-                APIClientID = string.Empty,
-                APIClientSecret = string.Empty,
+                UseAuthorizationCode = false,
             };
         }
 
@@ -84,20 +86,33 @@ namespace osu.Game.Tournament
         private void load(Storage baseStorage)
         {
             credentialStorage = baseStorage;
-            API.Endpoints.APIClientID = string.Empty;
-            API.Endpoints.APIClientSecret = string.Empty;
+            defaultApiClientId = API.Endpoints.APIClientID;
+            defaultApiClientSecret = API.Endpoints.APIClientSecret;
+            savedApiClientId = defaultApiClientId;
+            savedApiClientSecret = defaultApiClientSecret;
+
             if (baseStorage.Exists(credentials_filename))
             {
                 using var stream = baseStorage.GetStream(credentials_filename);
                 using var reader = new StreamReader(stream);
-                var credentials = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
+                string[]? credentials = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
+
                 if (credentials?.Length >= 2)
                 {
-                    API.SetOAuthCredentials(credentials[0], credentials[1]);
-                    if (credentials.Length > 2)
+                    API.Endpoints.UseAuthorizationCode = credentials.Length > 3 && bool.TryParse(credentials[3], out bool useAuthorizationCode) && useAuthorizationCode;
+                    savedApiClientId = credentials[0];
+                    savedApiClientSecret = credentials[1];
+
+                    if (API.Endpoints.UseAuthorizationCode)
+                        API.SetOAuthCredentials(savedApiClientId, savedApiClientSecret);
+                    else
+                        API.SetOAuthCredentials(defaultApiClientId, defaultApiClientSecret);
+
+                    if (API.Endpoints.UseAuthorizationCode && credentials.Length > 2)
                         API.SetOAuthToken(credentials[2]);
                 }
             }
+
             API.OAuthTokenChanged += saveOAuthToken;
             Add(initialisationText = new TournamentSpriteText
             {
@@ -417,6 +432,7 @@ namespace osu.Game.Tournament
         {
             SavingChanges?.Invoke();
             saveOAuthToken(API.OAuthTokenString);
+
             if (!bracketLoadTaskCompletionSource.Task.IsCompletedSuccessfully)
             {
                 Logger.Log("Inhibiting bracket save as bracket parsing failed");
@@ -428,13 +444,36 @@ namespace osu.Game.Tournament
 
         private void saveOAuthToken(string token)
         {
-            if (credentialStorage == null || !API.Endpoints.UseAuthorizationCode)
+            if (credentialStorage == null)
                 return;
+
+            if (API.Endpoints.UseAuthorizationCode)
+            {
+                savedApiClientId = API.Endpoints.APIClientID;
+                savedApiClientSecret = API.Endpoints.APIClientSecret;
+            }
 
             using var stream = credentialStorage.CreateFileSafely(credentials_filename);
             using var writer = new StreamWriter(stream);
-            writer.Write(JsonConvert.SerializeObject(new[] { API.Endpoints.APIClientID, API.Endpoints.APIClientSecret, token ?? string.Empty }));
+            writer.Write(JsonConvert.SerializeObject(new[]
+            {
+                savedApiClientId,
+                savedApiClientSecret,
+                API.Endpoints.UseAuthorizationCode ? token ?? string.Empty : string.Empty,
+                API.Endpoints.UseAuthorizationCode.ToString(),
+            }));
         }
+
+        public void SetTournamentOAuthCredentials(string clientId, string clientSecret)
+        {
+            savedApiClientId = clientId;
+            savedApiClientSecret = clientSecret;
+            API.SetOAuthCredentials(clientId, clientSecret);
+        }
+
+        public void UseStoredClientCredentials() => API.SetOAuthCredentials(savedApiClientId, savedApiClientSecret);
+
+        public void UsePasswordGrantClientCredentials() => API.SetOAuthCredentials(defaultApiClientId, defaultApiClientSecret);
 
         private void saveChanges()
         {
