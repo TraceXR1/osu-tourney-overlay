@@ -3,10 +3,6 @@ name: Build and release
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: Target branch
-        required: true
-        type: string
       var:
         description: Variant identifier
         required: false
@@ -16,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.branch }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +27,7 @@ jobs:
       - name: Checkout selected branch
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Calculate release version
