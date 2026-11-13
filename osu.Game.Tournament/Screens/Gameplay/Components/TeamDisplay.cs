@@ -38,7 +38,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             }
         }
 
-        public TeamDisplay(TournamentTeam? team, TeamColour colour, Bindable<int?> currentTeamScore, int pointsToWin)
+        public TeamDisplay(TournamentTeam? team, TeamColour colour, Bindable<Colour4> teamColour, Bindable<int?> currentTeamScore, int pointsToWin)
             : base(team)
         {
             AutoSizeAxes = Axes.Both;
@@ -90,7 +90,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                                                 Origin = anchor,
                                                 Anchor = anchor,
                                             },
-                                            score = new TeamScore(currentTeamScore, colour, pointsToWin)
+                                            score = new TeamScore(currentTeamScore, teamColour, colour, pointsToWin)
                                             {
                                                 Origin = anchor,
                                                 Anchor = anchor,
