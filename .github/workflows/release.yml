@@ -94,6 +94,7 @@ jobs:
         env:
           PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
           COMMIT: ${{ steps.version.outputs.commit }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           if [[ -n "$PREVIOUS_TAG" ]]; then
@@ -105,11 +106,17 @@ jobs:
             echo "- Maintenance release." > release-notes.md
           fi
           {
-            echo '### Changes'
-            echo
+            echo '## Changes'
             cat release-notes.md
             echo
-            echo "Source commit: \`$COMMIT\`."
+            echo
+            echo "**Source commit**: \`$COMMIT\`"
+            echo
+            if [[ -n "$PREVIOUS_TAG" ]]; then
+              echo "**Full Changelog**: https://github.com/$REPOSITORY/compare/$PREVIOUS_TAG...$COMMIT"
+            else
+              echo "**Full Changelog**: https://github.com/$REPOSITORY/commit/$COMMIT"
+            fi
           } > release-body.md
 
       - name: Upload release notes
