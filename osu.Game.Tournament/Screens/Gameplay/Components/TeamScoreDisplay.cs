@@ -18,6 +18,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private readonly Bindable<TournamentMatch?> currentMatch = new Bindable<TournamentMatch?>();
         private readonly Bindable<TournamentTeam?> currentTeam = new Bindable<TournamentTeam?>();
         private readonly Bindable<int?> currentTeamScore = new Bindable<int?>();
+        private Bindable<Colour4> teamColourBindable = null!;
 
         private TeamDisplay? teamDisplay;
 
@@ -38,6 +39,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         [BackgroundDependencyLoader]
         private void load(LadderInfo ladder)
         {
+            teamColourBindable = ladder.GetSide(teamColour).Colour;
             currentMatch.BindTo(ladder.CurrentMatch);
             currentMatch.BindValueChanged(matchChanged);
 
@@ -95,7 +97,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
             InternalChildren = new Drawable[]
             {
-                teamDisplay = new TeamDisplay(team.NewValue, teamColour, currentTeamScore, currentMatch.Value?.PointsToWin ?? 0),
+                teamDisplay = new TeamDisplay(team.NewValue, teamColour, teamColourBindable, currentTeamScore, currentMatch.Value?.PointsToWin ?? 0),
             };
 
             teamDisplay.ShowScore = wasShowingScores;

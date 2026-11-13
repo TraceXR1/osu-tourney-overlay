@@ -7,8 +7,6 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Framework.Graphics.Sprites;
-using osu.Framework.Graphics.Textures;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Tournament.Components;
@@ -198,13 +196,13 @@ namespace osu.Game.Tournament.Screens.TeamIntro
                     this.mods = mods;
                     this.seeding = seeding;
 
-                    Padding = new MarginPadding { Vertical = 10 };
+                    Padding = new MarginPadding { Top = 6, Bottom = 0 };
 
                     AutoSizeAxes = Axes.Y;
                 }
 
                 [BackgroundDependencyLoader]
-                private void load(TextureStore textures)
+                private void load()
                 {
                     FillFlowContainer row;
 
@@ -220,31 +218,39 @@ namespace osu.Game.Tournament.Screens.TeamIntro
 
                     if (!string.IsNullOrEmpty(mods))
                     {
-                        row.Add(new Sprite
+                        row.Add(new TournamentModIcon(mods)
                         {
-                            Texture = textures.Get($"Mods/{mods.ToLowerInvariant()}"),
-                            Scale = new Vector2(0.5f)
+                            Size = new Vector2(44),
                         });
                     }
 
                     row.Add(new Container
                     {
-                        Size = new Vector2(50, 16),
-                        CornerRadius = 10,
-                        Masking = true,
+                        Size = new Vector2(50, 44),
                         Children = new Drawable[]
                         {
-                            new Box
+                            new Container
                             {
-                                RelativeSizeAxes = Axes.Both,
-                                Colour = TournamentGame.ELEMENT_BACKGROUND_COLOUR,
-                            },
-                            new TournamentSpriteText
-                            {
+                                Size = new Vector2(50, 16),
                                 Anchor = Anchor.Centre,
                                 Origin = Anchor.Centre,
-                                Text = seeding.ToString("#,0"),
-                                Colour = TournamentGame.ELEMENT_FOREGROUND_COLOUR
+                                CornerRadius = 10,
+                                Masking = true,
+                                Children = new Drawable[]
+                                {
+                                    new Box
+                                    {
+                                        RelativeSizeAxes = Axes.Both,
+                                        Colour = TournamentGame.ELEMENT_BACKGROUND_COLOUR,
+                                    },
+                                    new TournamentSpriteText
+                                    {
+                                        Anchor = Anchor.Centre,
+                                        Origin = Anchor.Centre,
+                                        Text = seeding.ToString("#,0"),
+                                        Colour = TournamentGame.ELEMENT_FOREGROUND_COLOUR
+                                    },
+                                }
                             },
                         }
                     });
@@ -319,7 +325,7 @@ namespace osu.Game.Tournament.Screens.TeamIntro
                     AutoSizeAxes = Axes.Both;
 
                     Flag.RelativeSizeAxes = Axes.None;
-                    Flag.Scale = new Vector2(1.2f);
+                    Flag.Scale = new Vector2(2f);
 
                     InternalChild = new FillFlowContainer
                     {

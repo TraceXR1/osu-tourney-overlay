@@ -1,6 +1,7 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Graphics;
@@ -20,14 +21,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
         private readonly Bindable<int?> currentTeamScore = new Bindable<int?>();
         private readonly StarCounter counter;
 
-        public TeamScore(Bindable<int?> score, TeamColour colour, int count)
+        public TeamScore(Bindable<int?> score, Bindable<Colour4> teamColour, TeamColour colour, int count)
         {
             bool flip = colour == TeamColour.Blue;
             var anchor = flip ? Anchor.TopRight : Anchor.TopLeft;
 
             AutoSizeAxes = Axes.Both;
 
-            InternalChild = counter = new TeamScoreStarCounter(count)
+            InternalChild = counter = new TeamScoreStarCounter(count, teamColour)
             {
                 Anchor = anchor,
                 Scale = flip ? new Vector2(-1, 1) : Vector2.One,
@@ -41,9 +42,14 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
 
         public partial class TeamScoreStarCounter : StarCounter
         {
-            public TeamScoreStarCounter(int count)
+            public TeamScoreStarCounter(int count, Bindable<Colour4> teamColour)
                 : base(count)
             {
+                foreach (var star in ((FillFlowContainer<Star>)Children[0]).Children)
+                {
+                    if (star is LightSquare square)
+                        square.BindTeamColour(teamColour);
+                }
             }
 
             public override Star CreateStar() => new LightSquare();
@@ -51,6 +57,26 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
             public partial class LightSquare : Star
             {
                 private readonly Box box;
+
+                public void BindTeamColour(Bindable<Colour4> teamColour)
+                {
+                    teamColour.BindValueChanged(colour =>
+                    {
+                        var hsl = colour.NewValue.ToHSL();
+                        float saturation = hsl.Y;
+                        float lightness = Math.Clamp(hsl.Z + 0.3f, 0.68f, 0.82f);
+                        var squareColour = Colour4.FromHSL(hsl.X, saturation, lightness);
+                        box.Colour = squareColour;
+                        EdgeEffect = new EdgeEffectParameters
+                        {
+                            Type = EdgeEffectType.Glow,
+                            Colour = Colour4.FromHSL(hsl.X, saturation, Math.Min(lightness, 0.62f)).Opacity(0.28f),
+                            Hollow = true,
+                            Radius = 20,
+                            Roundness = 10,
+                        };
+                    }, true);
+                }
 
                 public LightSquare()
                 {
@@ -82,14 +108,7 @@ namespace osu.Game.Tournament.Screens.Gameplay.Components
                     };
 
                     Masking = true;
-                    EdgeEffect = new EdgeEffectParameters
-                    {
-                        Type = EdgeEffectType.Glow,
-                        Colour = Color4Extensions.FromHex("#FFE8AD").Opacity(0.1f),
-                        Hollow = true,
-                        Radius = 20,
-                        Roundness = 10,
-                    };
+                    EdgeEffect = new EdgeEffectParameters { Type = EdgeEffectType.Glow, Hollow = true, Radius = 20, Roundness = 10 };
                 }
 
                 public override void DisplayAt(float scale)

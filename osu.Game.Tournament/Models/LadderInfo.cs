@@ -51,6 +51,16 @@ namespace osu.Game.Tournament.Models
             MaxValue = 1366,
         };
 
+        [JsonIgnore]
+        public readonly Bindable<Colour4> ChromaKeyColour = new Bindable<Colour4>(new Colour4(0, 255, 0, 255));
+
+        [JsonProperty]
+        public string ChromaKeyColourHex
+        {
+            get => ChromaKeyColour.Value.ToHex();
+            set => ChromaKeyColour.Value = Colour4.FromHex(value);
+        }
+
         public Bindable<int> PlayersPerTeam = new BindableInt(4)
         {
             MinValue = 3,
