@@ -59,7 +59,7 @@ namespace osu.Game.Tournament.Screens.Editors
                 Depth = float.MaxValue
             });
 
-            grid.Spacing.Value = new Vector2(GRID_SPACING);
+            grid.Spacing.Value = new Vector2(GRID_SPACING * HORIZONTAL_POSITION_SCALE, GRID_SPACING);
 
             LadderInfo.Matches.CollectionChanged += (_, _) => updateMessage();
             updateMessage();
@@ -97,6 +97,7 @@ namespace osu.Game.Tournament.Screens.Editors
                 new OsuMenuItem("Create new match", MenuItemType.Highlighted, () =>
                 {
                     Vector2 pos = MatchesContainer.Count == 0 ? Vector2.Zero : lastMatchesContainerMouseDownPosition;
+                    pos.X /= HORIZONTAL_POSITION_SCALE;
 
                     TournamentMatch newMatch = new TournamentMatch { Position = { Value = new Point((int)pos.X, (int)pos.Y) } };
 

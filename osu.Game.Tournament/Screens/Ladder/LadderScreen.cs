@@ -28,6 +28,8 @@ namespace osu.Game.Tournament.Screens.Ladder
 
         protected Container Content = null!;
 
+        protected const float HORIZONTAL_POSITION_SCALE = 2;
+
         [BackgroundDependencyLoader]
         private void load()
         {
@@ -70,7 +72,7 @@ namespace osu.Game.Tournament.Screens.Ladder
             };
 
             void addMatch(TournamentMatch match) =>
-                MatchesContainer.Add(new DrawableTournamentMatch(match, this is LadderEditorScreen)
+                MatchesContainer.Add(new DrawableTournamentMatch(match, this is LadderEditorScreen, HORIZONTAL_POSITION_SCALE)
                 {
                     Changed = () => layout.Invalidate()
                 });

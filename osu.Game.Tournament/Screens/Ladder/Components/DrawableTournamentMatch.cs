@@ -23,6 +23,7 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
     {
         public readonly TournamentMatch Match;
         private readonly bool editor;
+        private readonly float horizontalPositionScale;
         protected readonly FillFlowContainer<DrawableMatchTeam> Flow;
         private readonly Drawable selectionBox;
         private readonly Drawable currentMatchSelectionBox;
@@ -34,10 +35,11 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
         [Resolved]
         private LadderInfo? ladderInfo { get; set; }
 
-        public DrawableTournamentMatch(TournamentMatch match, bool editor = false)
+        public DrawableTournamentMatch(TournamentMatch match, bool editor = false, float horizontalPositionScale = 1)
         {
             Match = match;
             this.editor = editor;
+            this.horizontalPositionScale = horizontalPositionScale;
 
             AutoSizeAxes = Axes.Both;
 
@@ -119,7 +121,7 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
             boundReference(match.Position).BindValueChanged(pos =>
             {
                 if (!IsDragged)
-                    Position = new Vector2(pos.NewValue.X, pos.NewValue.Y);
+                    Position = new Vector2(pos.NewValue.X * horizontalPositionScale, pos.NewValue.Y);
                 Changed?.Invoke();
             }, true);
             updateTeams();
@@ -316,7 +318,7 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
         {
             if (editorInfo != null)
             {
-                positionAtStartOfDrag = Position;
+                positionAtStartOfDrag = new Vector2(Position.X / horizontalPositionScale, Position.Y);
                 return true;
             }
 
@@ -329,9 +331,10 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
 
             Selected = true;
 
-            this.MoveTo(snapToGrid(positionAtStartOfDrag + (e.MousePosition - e.MouseDownPosition)));
+            Vector2 position = snapToGrid(positionAtStartOfDrag + new Vector2((e.MousePosition.X - e.MouseDownPosition.X) / horizontalPositionScale, e.MousePosition.Y - e.MouseDownPosition.Y));
+            this.MoveTo(new Vector2(position.X * horizontalPositionScale, position.Y));
 
-            Match.Position.Value = new Point((int)Position.X, (int)Position.Y);
+            Match.Position.Value = new Point((int)position.X, (int)position.Y);
         }
 
         private Vector2 snapToGrid(Vector2 pos) =>
