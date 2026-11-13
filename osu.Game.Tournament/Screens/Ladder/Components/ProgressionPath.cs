@@ -32,21 +32,22 @@ namespace osu.Game.Tournament.Screens.Ladder.Components
             var q2 = Destination.ScreenSpaceDrawQuad;
 
             float padding = q1.Width / 20;
+            float connectionPadding = padding / 2;
 
             bool progressionToRight = q2.TopLeft.X > q1.TopLeft.X;
 
             if (!progressionToRight)
                 (q2, q1) = (q1, q2);
 
-            var c1 = getCenteredVector(q1.TopRight, q1.BottomRight) + new Vector2(padding, 0);
-            var c2 = getCenteredVector(q2.TopLeft, q2.BottomLeft) - new Vector2(padding, 0);
+            var c1 = getCenteredVector(q1.TopRight, q1.BottomRight) + new Vector2(connectionPadding, 0);
+            var c2 = getCenteredVector(q2.TopLeft, q2.BottomLeft) - new Vector2(connectionPadding, 0);
 
             var p1 = c1;
             var p2 = p1 + new Vector2(padding, 0);
 
             if (p2.X > c2.X)
             {
-                c2 = getCenteredVector(q2.TopRight, q2.BottomRight) + new Vector2(padding, 0);
+                c2 = getCenteredVector(q2.TopRight, q2.BottomRight) + new Vector2(connectionPadding, 0);
                 p2.X = c2.X + padding;
             }
 
