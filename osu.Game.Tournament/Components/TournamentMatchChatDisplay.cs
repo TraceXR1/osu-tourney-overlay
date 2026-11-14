@@ -59,6 +59,9 @@ namespace osu.Game.Tournament.Components
             channelName.BindValueChanged(c =>
             {
                 Logger.Log($"Tournament IPC chat channel changed from '{c.OldValue}' to '{c.NewValue}'", LoggingTarget.Network);
+                if (currentChannel is Channel previousChannel && api.IsLoggedIn)
+                    api.Queue(new LeaveChannelRequest(previousChannel));
+
                 currentChannel = null;
                 Channel.Value = null;
 
@@ -67,12 +70,13 @@ namespace osu.Game.Tournament.Components
                     var channel = new Channel
                     {
                         Id = newChannelId,
-                        Type = ChannelType.Multiplayer
+                        Type = ChannelType.Public
                     };
 
                     Logger.Log($"Displaying tournament multiplayer chat channel {newChannelId}", LoggingTarget.Network);
                     currentChannel = channel;
                     Channel.Value = channel;
+                    joinChannel(channel);
                     if (apiState.Value == APIState.Online)
                         fetchInitialMessages(channel);
                 }
@@ -82,11 +86,13 @@ namespace osu.Game.Tournament.Components
             apiState.BindValueChanged(state =>
             {
                 if (state.NewValue == APIState.Online)
+                {
                     Schedule(() =>
                     {
                         if (currentChannel is Channel channel)
                             fetchInitialMessages(channel);
                     });
+                }
             }, true);
         }
 
@@ -164,16 +170,28 @@ namespace osu.Game.Tournament.Components
             api.Queue(request);
         }
 
+        private void joinChannel(Channel channel)
+        {
+            if (api == null || !api.IsLoggedIn)
+                return;
+
+            var request = new JoinChannelRequest(channel);
+            request.Failure += error => Logger.Error(error, $"Failed to join tournament chat channel {channel.Id}");
+            api.Queue(request);
+        }
+
         protected override void Dispose(bool isDisposing)
         {
             scheduledStart?.Cancel();
             disposed = true;
             apiState.UnbindAll();
+
             if (notificationsClient != null)
             {
                 notificationsClient.MessageReceived -= onSocketMessage;
                 notificationsClient.IsConnected.ValueChanged -= onConnectionChanged;
             }
+
             base.Dispose(isDisposing);
         }
 
