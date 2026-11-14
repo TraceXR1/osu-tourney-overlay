@@ -31,7 +31,7 @@ namespace osu.Game.Online.API.Requests
             request.ContentType = "application/json";
             request.AddRaw(JsonConvert.SerializeObject(new RequestBody
             {
-                Mods = mods,
+                Mods = mods.Select(acronym => new APIMod { Acronym = acronym }).ToArray(),
                 Ruleset = ruleset,
             }));
             return request;
@@ -40,7 +40,7 @@ namespace osu.Game.Online.API.Requests
         private class RequestBody
         {
             [JsonProperty("mods")]
-            public string[] Mods { get; set; } = [];
+            public APIMod[] Mods { get; set; } = [];
 
             [JsonProperty("ruleset")]
             public string Ruleset { get; set; } = string.Empty;

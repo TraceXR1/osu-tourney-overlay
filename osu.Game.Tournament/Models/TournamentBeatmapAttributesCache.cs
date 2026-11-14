@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using osu.Framework.Allocation;
+using osu.Framework.Logging;
 using osu.Game.Database;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
@@ -30,7 +31,16 @@ namespace osu.Game.Tournament.Models
             cancellationToken.ThrowIfCancellationRequested();
 
             var request = new GetBeatmapAttributesRequest(lookup.BeatmapID, lookup.Ruleset, lookup.Mods.Split(',', StringSplitOptions.RemoveEmptyEntries));
-            await api.PerformAsync(request).ConfigureAwait(false);
+
+            try
+            {
+                await api.PerformAsync(request).ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                Logger.Error(error, $"Failed to load beatmap attributes for beatmap {lookup.BeatmapID} with mods {lookup.Mods}");
+                throw;
+            }
 
             cancellationToken.ThrowIfCancellationRequested();
             return request.Response?.Attributes?.StarRating;
