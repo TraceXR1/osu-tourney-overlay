@@ -250,7 +250,7 @@ namespace osu.Game.Tournament
                 Ruleset.BindTo(ladder.Ruleset);
 
                 dependencies.Cache(ladder);
-                dependencies.Cache(new TournamentBeatmapAttributesCache());
+                dependencies.Cache(new TournamentBeatmapAttributesClient());
                 dependencies.CacheAs<MatchIPCInfo>(ipc = new FileBasedIPC());
                 Add(ipc);
 

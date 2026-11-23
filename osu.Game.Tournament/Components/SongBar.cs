@@ -12,6 +12,7 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Logging;
 using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Legacy;
 using osu.Game.Extensions;
@@ -42,7 +43,7 @@ namespace osu.Game.Tournament.Components
         private IBindable<RulesetInfo> ruleset { get; set; } = null!;
 
         [Resolved]
-        private TournamentBeatmapAttributesCache attributesCache { get; set; } = null!;
+        private TournamentBeatmapAttributesClient attributesClient { get; set; } = null!;
 
         public IBeatmapInfo? Beatmap
         {
@@ -301,12 +302,13 @@ namespace osu.Game.Tournament.Components
             if (beatmap is not TournamentBeatmap currentBeatmap || currentBeatmap.OnlineID <= 0)
                 return;
 
-            var convertedMods = ruleset.Value.CreateInstance().ConvertFromLegacyMods(mods).ToArray();
+            const LegacyMods non_difficulty_mods = LegacyMods.NoFail | LegacyMods.SuddenDeath | LegacyMods.Perfect | LegacyMods.ScoreV2;
+            LegacyMods starRatingMods = mods & ~non_difficulty_mods;
 
-            if (convertedMods.Length == 0)
+            if (starRatingMods == LegacyMods.None)
                 return;
 
-            var ratingTask = attributesCache.GetStarRatingAsync(currentBeatmap.OnlineID, ruleset.Value.ShortName, convertedMods.Select(mod => mod.Acronym).ToArray());
+            var ratingTask = attributesClient.GetStarRatingAsync(currentBeatmap.OnlineID, ruleset.Value.ShortName, (int)starRatingMods);
             ratingTask.ContinueWith(task =>
             {
                 if (!task.IsCompletedSuccessfully)
@@ -315,12 +317,18 @@ namespace osu.Game.Tournament.Components
                 Scheduler.AddOnce(() =>
                 {
                     if (requestGeneration != starRatingRequestGeneration)
+                    {
+                        Logger.Log($"Discarded stale modded star rating for beatmap {currentBeatmap.OnlineID}", LoggingTarget.Network);
                         return;
+                    }
 
                     moddedStarRating = task.GetResultSafely();
 
                     if (moddedStarRating.HasValue)
+                    {
+                        Logger.Log($"Applied modded star rating {moddedStarRating.Value} for beatmap {currentBeatmap.OnlineID}", LoggingTarget.Network);
                         refreshContent();
+                    }
                 });
             });
         }

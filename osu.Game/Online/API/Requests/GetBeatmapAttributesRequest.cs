@@ -1,7 +1,6 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System.Linq;
 using System.Net.Http;
 using Newtonsoft.Json;
 using osu.Framework.IO.Network;
@@ -12,14 +11,14 @@ namespace osu.Game.Online.API.Requests
     public class GetBeatmapAttributesRequest : APIRequest<APIBeatmapAttributesResponse>
     {
         private readonly int beatmapID;
-        private readonly string[] mods;
+        private readonly int mods;
         private readonly string ruleset;
 
-        public GetBeatmapAttributesRequest(int beatmapID, string ruleset, string[] mods)
+        public GetBeatmapAttributesRequest(int beatmapID, string ruleset, int mods)
         {
             this.beatmapID = beatmapID;
             this.ruleset = ruleset;
-            this.mods = mods.ToArray();
+            this.mods = mods;
         }
 
         protected override string Target => $"beatmaps/{beatmapID}/attributes";
@@ -31,7 +30,7 @@ namespace osu.Game.Online.API.Requests
             request.ContentType = "application/json";
             request.AddRaw(JsonConvert.SerializeObject(new RequestBody
             {
-                Mods = mods.Select(acronym => new APIMod { Acronym = acronym }).ToArray(),
+                Mods = mods,
                 Ruleset = ruleset,
             }));
             return request;
@@ -40,7 +39,7 @@ namespace osu.Game.Online.API.Requests
         private class RequestBody
         {
             [JsonProperty("mods")]
-            public APIMod[] Mods { get; set; } = [];
+            public int Mods { get; set; }
 
             [JsonProperty("ruleset")]
             public string Ruleset { get; set; } = string.Empty;
