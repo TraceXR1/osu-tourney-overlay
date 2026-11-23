@@ -353,7 +353,7 @@ namespace osu.Game.Tournament.Components
                     Triangles = false,
                     Scale = new Vector2(0.08f),
                     Margin = new MarginPadding(50),
-                    X = -10,
+                    X = 10,
                     Anchor = Anchor.CentreRight,
                     Origin = Anchor.CentreRight,
                 };
@@ -365,12 +365,15 @@ namespace osu.Game.Tournament.Components
             var rows = new Drawable[rowCount][];
             var slotsPerMod = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             string[] labels = new string[beatmaps.Length];
+            bool hasSingleTieBreaker = beatmaps.Count(beatmap => string.Equals(beatmap.Mods, "TB", StringComparison.OrdinalIgnoreCase)) == 1;
 
             for (int i = 0; i < beatmaps.Length; i++)
             {
                 string mod = beatmaps[i].Mods;
                 slotsPerMod.TryGetValue(mod, out int modSlot);
-                labels[i] = $"{mod}{++modSlot}";
+                labels[i] = hasSingleTieBreaker && string.Equals(mod, "TB", StringComparison.OrdinalIgnoreCase)
+                    ? mod
+                    : $"{mod}{++modSlot}";
                 slotsPerMod[mod] = modSlot;
             }
 
