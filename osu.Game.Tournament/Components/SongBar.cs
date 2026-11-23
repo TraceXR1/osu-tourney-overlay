@@ -362,7 +362,7 @@ namespace osu.Game.Tournament.Components
             const int columns = 8;
             var beatmaps = round.Beatmaps.ToArray();
             int rowCount = Math.Max(1, (beatmaps.Length + columns - 1) / columns);
-            var rows = new Drawable[rowCount][];
+            var rows = new Drawable[rowCount];
             var slotsPerMod = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             string[] labels = new string[beatmaps.Length];
             bool hasSingleTieBreaker = beatmaps.Count(beatmap => string.Equals(beatmap.Mods, "TB", StringComparison.OrdinalIgnoreCase)) == 1;
@@ -414,7 +414,31 @@ namespace osu.Game.Tournament.Components
                     }
                 }
 
-                rows[rowIndex] = row;
+                if (slotCount == columns)
+                {
+                    rows[rowIndex] = new GridContainer
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        ColumnDimensions = Enumerable.Repeat(new Dimension(GridSizeMode.Relative, 1f / columns), columns).ToArray(),
+                        RowDimensions = new[] { new Dimension() },
+                        Content = new[] { row },
+                    };
+                }
+                else
+                {
+                    rows[rowIndex] = new FillFlowContainer
+                    {
+                        AutoSizeAxes = Axes.Both,
+                        Direction = FillDirection.Horizontal,
+                        Spacing = new Vector2(20, 0),
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        Children = row,
+                    };
+                }
             }
 
             return new FillFlowContainer
@@ -429,15 +453,7 @@ namespace osu.Game.Tournament.Components
                 {
                     RelativeSizeAxes = Axes.X,
                     Height = 20,
-                    Child = new FillFlowContainer
-                    {
-                        AutoSizeAxes = Axes.Both,
-                        Direction = FillDirection.Horizontal,
-                        Spacing = new Vector2(20, 0),
-                        Anchor = Anchor.Centre,
-                        Origin = Anchor.Centre,
-                        Children = row,
-                    }
+                    Child = row,
                 }).ToArray(),
             };
         }
